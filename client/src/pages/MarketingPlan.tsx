@@ -21,9 +21,20 @@ import { cn } from "@/lib/utils";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function parsePlan(raw: string | null | undefined): Record<string, any> | null {
   if (!raw) return null;
-  // strip markdown code fences if present
-  const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-  try { return JSON.parse(clean); } catch { return null; }
+  // Strip all markdown code fences and leading/trailing whitespace
+  let clean = raw.trim();
+  // Remove ```json ... ``` or ``` ... ``` wrappers
+  clean = clean.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+  // If it starts with { or [ it's JSON - try parse directly
+  if (clean.startsWith("{") || clean.startsWith("[")) {
+    try { return JSON.parse(clean); } catch {}
+  }
+  // Try to extract JSON object from within the string
+  const jsonMatch = clean.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try { return JSON.parse(jsonMatch[0]); } catch {}
+  }
+  return null;
 }
 
 const CHANNEL_ICONS: Record<string, React.ReactNode> = {
@@ -82,6 +93,80 @@ function ChannelCard({ ch, symbol }: { ch: any; symbol: string }) {
         <p className="text-xs text-muted-foreground leading-relaxed">{
           Array.isArray(ch.tactics) ? ch.tactics.slice(0, 2).join(" · ") : ch.tactics
         }</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Smart Fallback Renderer ─────────────────────────────────────────────────
+// Handles cases where parsePlan() still fails (e.g. truncated JSON from DB)
+// Tries multiple strategies to extract and display plan content beautifully
+function SmartPlanFallback({ raw, symbol }: { raw: string | null | undefined; symbol: string }) {
+  if (!raw) return null;
+
+  // Strategy 1: Try to extract any key-value pairs from the raw string
+  // and render them as readable sections
+  const sections: { title: string; content: string }[] = [];
+
+  // Extract executiveSummary
+  const summaryMatch = raw.match(/"executiveSummary"\s*:\s*"([^"]+)"/);
+  if (summaryMatch) sections.push({ title: "Executive Summary", content: summaryMatch[1] });
+
+  // Extract channels array items
+  const channelMatches = Array.from(raw.matchAll(/"channel"\s*:\s*"([^"]+)"/g));
+  const budgetMatches = Array.from(raw.matchAll(/"budget_percent"\s*:\s*(\d+)/g));
+  const monthlyMatches = Array.from(raw.matchAll(/"monthly_budget"\s*:\s*"?([\d,]+)"?/g));
+
+  // Extract quick wins
+  const quickWinsMatch = raw.match(/"quickWins"\s*:\s*\[([^\]]+)\]/);
+  if (quickWinsMatch) {
+    const wins = Array.from(quickWinsMatch[1].matchAll(/"([^"]+)"/g)).map((m: RegExpExecArray) => m[1]);
+    if (wins.length) sections.push({ title: "Quick Wins", content: wins.join("\n") });
+  }
+
+  return (
+    <div className="space-y-5">
+      {sections.map((s, i) => (
+        <div key={i} className="card-premium p-5">
+          <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-3">{s.title}</p>
+          <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{s.content}</p>
+        </div>
+      ))}
+
+      {channelMatches.length > 0 && (
+        <div className="card-premium p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-400"><BarChart3 size={16} /></div>
+            <h3 className="font-semibold text-foreground">Channel Budget Allocation</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {channelMatches.map((m, i) => {
+              const pct = Number(budgetMatches[i]?.[1] || 0);
+              const monthly = monthlyMatches[i]?.[1] || "—";
+              return (
+                <div key={i} className="bg-muted/50 rounded-xl p-4 border border-border/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-md bg-primary/15 flex items-center justify-center text-primary">{channelIcon(m[1])}</div>
+                      <span className="font-medium text-sm text-foreground">{m[1]}</span>
+                      {m[1].toLowerCase().includes("seo") && <Badge className="text-[10px] bg-violet-500/15 text-violet-400 border-violet-500/20 px-1.5 py-0">Primary</Badge>}
+                    </div>
+                    <span className="text-xs font-semibold text-primary">{pct}%</span>
+                  </div>
+                  <Progress value={pct} className="h-1.5 mb-2" />
+                  <p className="text-xs text-muted-foreground">{symbol}{monthly}/mo</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {sections.length === 0 && channelMatches.length === 0 && (
+        <div className="card-premium p-6 text-center">
+          <p className="text-sm text-muted-foreground mb-3">Plan data is being processed. Please regenerate your plan to see the full formatted view.</p>
+          <Badge variant="outline">Plan stored — click Regenerate Plan to refresh</Badge>
+        </div>
       )}
     </div>
   );
@@ -348,13 +433,8 @@ export default function MarketingPlan() {
                   </div>
                 </>
               ) : (
-                /* Fallback: raw text if JSON parse fails */
-                <div className="card-premium p-6">
-                  <h3 className="font-semibold text-foreground mb-4">Full Marketing Strategy</h3>
-                  <pre className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed font-mono overflow-x-auto">
-                    {latestPlan.planJson}
-                  </pre>
-                </div>
+                /* Smart fallback: try to render any JSON structure gracefully */
+                <SmartPlanFallback raw={latestPlan.planJson} symbol={currencySymbol} />
               )}
             </div>
           )}

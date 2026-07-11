@@ -315,18 +315,25 @@ Return a detailed JSON marketing plan with:
 - estimatedLeadsPerMonth: number
 - estimatedROI: string`
         );
+        // Strip markdown code fences before storing
+        let cleanContent = content.trim();
+        cleanContent = cleanContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
         let planObj: any = {};
-        try { planObj = JSON.parse(content); } catch {}
+        try { planObj = JSON.parse(cleanContent); } catch {
+          // Try extracting JSON object from within
+          const m = cleanContent.match(/\{[\s\S]*\}/);
+          if (m) try { planObj = JSON.parse(m[0]); cleanContent = m[0]; } catch {}
+        }
         const id = await createMarketingPlan({
           projectId: input.projectId,
-          title: `Marketing Plan — ${input.objective}`,
+          title: `Marketing Plan \u2014 ${input.objective}`,
           objective: input.objective,
           totalBudget: input.budget as any,
           timeframe: input.timeframe,
-          planJson: content,
+          planJson: cleanContent,
           status: "draft",
         });
-        return { id, plan: planObj, raw: content };
+        return { id, plan: planObj, raw: cleanContent };
       }),
 
     activate: protectedProcedure
