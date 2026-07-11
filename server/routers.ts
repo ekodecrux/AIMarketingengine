@@ -196,14 +196,19 @@ export const appRouter = router({
         color: z.string().optional(),
         targetAudience: z.string().optional(),
         location: z.string().optional(),
+        currency: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { goals, targetAudience, location, ...rest } = input;
+        const { goals, targetAudience, location, currency, ...rest } = input;
         const id = await createProject({
           ...rest,
           goal: goals?.join(", ") || input.goal,
           userId: ctx.user.id,
         });
+        // Save currency to business profile for this project
+        if (currency && currency !== "USD") {
+          await upsertBusinessProfile({ projectId: id, currency });
+        }
         return { id };
       }),
     update: protectedProcedure

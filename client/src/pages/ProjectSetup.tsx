@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useProject } from "@/contexts/ProjectContext";
-import { INDUSTRIES, MARKETING_GOALS } from "../../../shared/types";
+import { INDUSTRIES, MARKETING_GOALS, CURRENCIES } from "../../../shared/types";
 import { ArrowRight, CheckCircle2, Sparkles, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +25,7 @@ export default function ProjectSetup() {
   const [form, setForm] = useState({
     name: "", color: PROJECT_COLORS[0], industry: "", websiteUrl: "",
     description: "", targetAudience: "", goals: [] as string[],
-    monthlyBudget: "", location: "",
+    monthlyBudget: "", location: "", currency: "USD",
   });
   const [extracting, setExtracting] = useState(false);
 
@@ -166,7 +166,24 @@ export default function ProjectSetup() {
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Monthly Marketing Budget (USD)</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">Currency</label>
+                <div className="flex flex-wrap gap-2">
+                  {CURRENCIES.map(c => (
+                    <button key={c.code} type="button"
+                      onClick={() => setForm(f => ({ ...f, currency: c.code }))}
+                      className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                        form.currency === c.code
+                          ? "bg-primary/20 border-primary/50 text-primary"
+                          : "bg-muted border-border text-muted-foreground hover:border-primary/30 hover:text-foreground")}>
+                      {c.symbol} {c.code}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Monthly Marketing Budget ({CURRENCIES.find(c => c.code === form.currency)?.symbol || "$"})
+                </label>
                 <Input type="number" placeholder="e.g. 2000" value={form.monthlyBudget}
                   onChange={e => setForm(f => ({ ...f, monthlyBudget: e.target.value }))} className="bg-muted border-border" />
                 <p className="text-xs text-muted-foreground mt-1.5">The AI will suggest the optimal budget allocation for you</p>
@@ -187,7 +204,7 @@ export default function ProjectSetup() {
                         <div className={cn("h-full rounded-full", item.color)} style={{ width: `${item.pct}%` }} />
                       </div>
                       <span className="text-xs font-medium text-foreground w-20 text-right">
-                        ${Math.round(Number(form.monthlyBudget) * item.pct / 100).toLocaleString()} ({item.pct}%)
+                        {CURRENCIES.find(c => c.code === form.currency)?.symbol || "$"}{Math.round(Number(form.monthlyBudget) * item.pct / 100).toLocaleString()} ({item.pct}%)
                       </span>
                     </div>
                   ))}
@@ -199,6 +216,7 @@ export default function ProjectSetup() {
                   name: form.name, color: form.color, industry: form.industry, websiteUrl: form.websiteUrl,
                   description: form.description, goals: form.goals, targetAudience: form.targetAudience,
                   monthlyBudget: form.monthlyBudget ? form.monthlyBudget : undefined, location: form.location,
+                  currency: form.currency,
                 })} disabled={createProject.isPending}>
                   {createProject.isPending ? <><Zap size={16} className="animate-spin" />Creating...</> : <><Sparkles size={16} />Create & Generate Plan</>}
                 </Button>
