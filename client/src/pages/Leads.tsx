@@ -315,13 +315,17 @@ export default function Leads() {
         </Dialog>
       )}
 
-      {/* AI Lead Scraper Dialog */}
+      {/* AI Lead Prospector Dialog */}
       <Dialog open={showScraper} onOpenChange={setShowScraper}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Bot size={18} className="text-primary"/>AI Lead Finder</DialogTitle>
-            <p className="text-sm text-muted-foreground">Describe your ideal customer and AI will discover matching leads</p>
+            <DialogTitle className="flex items-center gap-2"><Bot size={18} className="text-primary"/>AI Lead Prospector</DialogTitle>
+            <p className="text-sm text-muted-foreground">Describe your ideal customer profile — AI generates realistic prospect profiles to seed your pipeline</p>
           </DialogHeader>
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+            <span className="mt-0.5">⚠</span>
+            <span><strong>AI-Generated Prospects:</strong> These are AI-created profile examples based on your criteria — not scraped from real databases. Use them as pipeline starters or outreach templates, then verify and enrich with real contact data before reaching out.</span>
+          </div>
           {scrapeResults.length === 0 ? (
             <div className="space-y-4 pt-2">
               {[

@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   Backlink,
@@ -462,6 +462,131 @@ export async function getConsolidatedStats(userId: number) {
     content: totalContent,
     conversionRate: totalLeads > 0 ? Math.round((closedWon / totalLeads) * 100) : 0,
   };
+}
+
+// ─── Monthly Lead & Revenue Trend ───────────────────────────────────────────
+
+export async function getLeadMonthlyTrend(userId: number, months = 6) {
+  const db = await getDb();
+  if (!db) return [];
+  const userProjects = await db.select().from(projects).where(eq(projects.userId, userId));
+  const projectIds = userProjects.map((p) => p.id);
+  if (projectIds.length === 0) return [];
+
+  // Collect all leads across all projects
+  const allLeads: Lead[] = [];
+  for (const pid of projectIds) {
+    const pLeads = await db.select().from(leads).where(eq(leads.projectId, pid));
+    allLeads.push(...pLeads);
+  }
+
+  // Build monthly buckets for the last N months
+  const now = new Date();
+  const buckets: { month: string; leads: number; revenue: number }[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({
+      month: d.toLocaleString("en-US", { month: "short" }),
+      leads: 0,
+      revenue: 0,
+    });
+  }
+
+  for (const lead of allLeads) {
+    // Leads counted by creation month
+    const created = new Date(lead.createdAt);
+    const diffCreated = (now.getFullYear() - created.getFullYear()) * 12 + (now.getMonth() - created.getMonth());
+    if (diffCreated >= 0 && diffCreated < months) {
+      buckets[months - 1 - diffCreated].leads += 1;
+    }
+    // Revenue counted by close month (closedAt), not creation month
+    if (lead.stage === "closed_won" && lead.actualRevenue && lead.closedAt) {
+      const closed = new Date(lead.closedAt);
+      const diffClosed = (now.getFullYear() - closed.getFullYear()) * 12 + (now.getMonth() - closed.getMonth());
+      if (diffClosed >= 0 && diffClosed < months) {
+        buckets[months - 1 - diffClosed].revenue += Number(lead.actualRevenue);
+      }
+    }
+  }
+
+  return buckets;
+}
+
+// ─── Knowledge / Usage Stats ─────────────────────────────────────────────────
+
+export async function getUsageStats(userId: number) {
+  const db = await getDb();
+  if (!db) return { totalAiCalls: 0, totalKnowledgeEntries: 0, byCategory: {} };
+  const entries = await db.select().from(knowledgeEntries).where(eq(knowledgeEntries.userId, userId));
+  const byCategory: Record<string, number> = {};
+  for (const e of entries) {
+    byCategory[e.category] = (byCategory[e.category] || 0) + 1;
+  }
+  return {
+    totalAiCalls: entries.length,
+    totalKnowledgeEntries: entries.length,
+    byCategory,
+  };
+}
+
+// ─── User Management (admin) ─────────────────────────────────────────────────
+
+export async function getAllUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    role: users.role,
+    createdAt: users.createdAt,
+  }).from(users).orderBy(users.createdAt);
+}
+
+export async function updateUserRole(userId: number, role: "admin" | "user") {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db.update(users).set({ role }).where(eq(users.id, userId));
+  return { success: true };
+}
+
+// ─── Global Settings ─────────────────────────────────────────────────────────
+
+export async function getGlobalSetting(userId: number, key: string): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const { globalSettings } = await import("../drizzle/schema");
+  const rows = await db.select().from(globalSettings)
+    .where(and(eq(globalSettings.userId, userId), eq(globalSettings.settingKey, key)))
+    .limit(1);
+  return rows[0]?.settingValue ?? null;
+}
+
+export async function setGlobalSetting(userId: number, key: string, value: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const { globalSettings } = await import("../drizzle/schema");
+  await db.insert(globalSettings).values({ userId, settingKey: key, settingValue: value })
+    .onDuplicateKeyUpdate({ set: { settingValue: value } });
+}
+
+export async function getGlobalSettings(userId: number, keys: string[]): Promise<Record<string, string>> {
+  const db = await getDb();
+  if (!db) return {};
+  const { globalSettings } = await import("../drizzle/schema");
+  const rows = await db.select().from(globalSettings)
+    .where(and(eq(globalSettings.userId, userId), inArray(globalSettings.settingKey, keys)));
+  return Object.fromEntries(rows.map(r => [r.settingKey, r.settingValue ?? ""]));
+}
+
+export async function setGlobalSettings(userId: number, settings: Record<string, string>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const { globalSettings } = await import("../drizzle/schema");
+  for (const [key, value] of Object.entries(settings)) {
+    await db.insert(globalSettings).values({ userId, settingKey: key, settingValue: value })
+      .onDuplicateKeyUpdate({ set: { settingValue: value } });
+  }
 }
 
 // ─── Client Portal ────────────────────────────────────────────────────────────

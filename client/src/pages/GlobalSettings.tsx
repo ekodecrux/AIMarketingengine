@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,22 +7,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 import {
   Settings,
   Brain,
   Bell,
   Shield,
-  Palette,
   Globe,
-  Database,
   Zap,
   Users,
-  Key,
-  ChevronRight,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
+  RefreshCw,
+  BarChart3,
+  UserCog,
 } from "lucide-react";
 
 const AI_MODELS = [
@@ -32,39 +35,116 @@ const AI_MODELS = [
   { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro", description: "Long context window" },
 ];
 
+const SETTING_KEYS = [
+  "ai_model", "ai_temperature", "rag_enabled", "auto_save_knowledge",
+  "email_notifications", "lead_alerts", "campaign_reports", "weekly_digest",
+  "default_currency", "timezone", "language",
+];
+
 export default function GlobalSettings() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
-  // AI Settings
+  // Local state mirrors DB values
   const [selectedModel, setSelectedModel] = useState("gpt-4o");
-  const [aiTemperature, setAiTemperature] = useState("0.7");
+  const [aiTemperature, setAiTemperature] = useState(0.7);
   const [ragEnabled, setRagEnabled] = useState(true);
   const [autoSaveKnowledge, setAutoSaveKnowledge] = useState(true);
-
-  // Notification Settings
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [leadAlerts, setLeadAlerts] = useState(true);
   const [campaignReports, setCampaignReports] = useState(false);
   const [weeklyDigest, setWeeklyDigest] = useState(true);
-
-  // Platform Settings
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [timezone, setTimezone] = useState("Asia/Kolkata");
   const [language, setLanguage] = useState("en");
 
+  // Admin panel state
+  const [showUsers, setShowUsers] = useState(false);
+  const [showUsage, setShowUsage] = useState(false);
+
+  // Load settings from DB
+  const { data: settingsData, isLoading: settingsLoading } = trpc.globalSettings.get.useQuery(
+    { keys: SETTING_KEYS },
+    { enabled: !!user }
+  );
+
+  // Admin queries
+  const { data: allUsers, isLoading: usersLoading, refetch: refetchUsers } = trpc.admin.listUsers.useQuery(
+    undefined,
+    { enabled: isAdmin && showUsers }
+  );
+  const { data: usageStats, isLoading: usageLoading, refetch: refetchUsage } = trpc.admin.usageStats.useQuery(
+    undefined,
+    { enabled: isAdmin && showUsage }
+  );
+
+  const updateRole = trpc.admin.updateRole.useMutation({
+    onSuccess: () => { toast.success("Role updated"); refetchUsers(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const saveSettings = trpc.globalSettings.save.useMutation({
+    onSuccess: () => toast.success("Settings saved"),
+    onError: (e) => toast.error(`Failed to save: ${e.message}`),
+  });
+
+  // Populate state from DB on load
+  useEffect(() => {
+    if (!settingsData) return;
+    if (settingsData.ai_model) setSelectedModel(settingsData.ai_model);
+    if (settingsData.ai_temperature) setAiTemperature(parseFloat(settingsData.ai_temperature));
+    if (settingsData.rag_enabled !== undefined) setRagEnabled(settingsData.rag_enabled === "true");
+    if (settingsData.auto_save_knowledge !== undefined) setAutoSaveKnowledge(settingsData.auto_save_knowledge === "true");
+    if (settingsData.email_notifications !== undefined) setEmailNotifications(settingsData.email_notifications === "true");
+    if (settingsData.lead_alerts !== undefined) setLeadAlerts(settingsData.lead_alerts === "true");
+    if (settingsData.campaign_reports !== undefined) setCampaignReports(settingsData.campaign_reports === "true");
+    if (settingsData.weekly_digest !== undefined) setWeeklyDigest(settingsData.weekly_digest === "true");
+    if (settingsData.default_currency) setDefaultCurrency(settingsData.default_currency);
+    if (settingsData.timezone) setTimezone(settingsData.timezone);
+    if (settingsData.language) setLanguage(settingsData.language);
+  }, [settingsData]);
+
   function handleSaveAI() {
-    toast.success("AI settings saved successfully");
+    saveSettings.mutate({
+      settings: {
+        ai_model: selectedModel,
+        ai_temperature: String(aiTemperature),
+        rag_enabled: String(ragEnabled),
+        auto_save_knowledge: String(autoSaveKnowledge),
+      },
+    });
   }
 
   function handleSaveNotifications() {
-    toast.success("Notification preferences updated");
+    saveSettings.mutate({
+      settings: {
+        email_notifications: String(emailNotifications),
+        lead_alerts: String(leadAlerts),
+        campaign_reports: String(campaignReports),
+        weekly_digest: String(weeklyDigest),
+      },
+    });
   }
 
   function handleSavePlatform() {
-    toast.success("Platform settings saved");
+    saveSettings.mutate({
+      settings: {
+        default_currency: defaultCurrency,
+        timezone,
+        language,
+      },
+    });
   }
 
-  const isAdmin = user?.role === "admin";
+  if (settingsLoading) {
+    return (
+      <AppLayout>
+        <div className="p-6 max-w-4xl mx-auto space-y-6">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-48 rounded-xl" />)}
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -75,245 +155,306 @@ export default function GlobalSettings() {
             <Settings className="w-5 h-5 text-violet-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Platform Settings</h1>
-            <p className="text-slate-400 text-sm">Configure AI models, notifications, and platform preferences</p>
+            <h1 className="text-2xl font-bold text-foreground">Platform Settings</h1>
+            <p className="text-muted-foreground text-sm">Configure AI models, notifications, and platform preferences</p>
           </div>
-          {isAdmin && (
-            <Badge className="ml-auto bg-violet-600/20 text-violet-300 border-violet-500/30">
-              <Shield className="w-3 h-3 mr-1" />
-              Admin
-            </Badge>
-          )}
         </div>
 
         {/* AI Configuration */}
-        <Card className="bg-white/5 border-white/10">
+        <Card>
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2">
               <Brain className="w-5 h-5 text-violet-400" />
-              <CardTitle className="text-white text-lg">AI Configuration</CardTitle>
+              <CardTitle className="text-lg">AI Configuration</CardTitle>
             </div>
-            <CardDescription className="text-slate-400">
-              Configure the AI model and knowledge base settings used across all projects
-            </CardDescription>
+            <CardDescription>Choose the AI model and behaviour for all generated content</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2">
-              <Label className="text-slate-300">Default AI Model</Label>
+              <Label>AI Model</Label>
               <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1a1a2e] border-white/10">
-                  {AI_MODELS.map((m) => (
-                    <SelectItem key={m.value} value={m.value} className="text-white focus:bg-white/10">
-                      <div className="flex items-center gap-2">
-                        <span>{m.label}</span>
-                        <span className="text-slate-500 text-xs">— {m.description}</span>
-                      </div>
+                <SelectContent>
+                  {AI_MODELS.map(m => (
+                    <SelectItem key={m.value} value={m.value}>
+                      <span className="font-medium">{m.label}</span>
+                      <span className="text-muted-foreground text-xs ml-2">— {m.description}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-slate-500">Used for marketing plan generation, content creation, and AI chat</p>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-slate-300">AI Creativity (Temperature: {aiTemperature})</Label>
-              <Input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={aiTemperature}
-                onChange={(e) => setAiTemperature(e.target.value)}
-                className="bg-white/5 border-white/10 accent-violet-500 h-2 cursor-pointer"
+              <Label>Temperature: <span className="text-violet-400 font-mono">{aiTemperature.toFixed(1)}</span></Label>
+              <Slider
+                min={0} max={1} step={0.1}
+                value={[aiTemperature]}
+                onValueChange={([v]) => setAiTemperature(v)}
+                className="w-full"
               />
-              <div className="flex justify-between text-xs text-slate-500">
-                <span>Precise (0.0)</span>
-                <span>Balanced (0.7)</span>
-                <span>Creative (1.0)</span>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>0.0 — Precise</span>
+                <span>1.0 — Creative</span>
               </div>
             </div>
 
-            <Separator className="bg-white/10" />
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-slate-200 text-sm font-medium">Knowledge Base (RAG)</p>
-                  <p className="text-slate-500 text-xs mt-0.5">Use stored knowledge before calling AI — faster and cheaper</p>
-                </div>
-                <Switch checked={ragEnabled} onCheckedChange={setRagEnabled} />
+            <div className="flex items-center justify-between py-2 border-t border-border">
+              <div>
+                <p className="text-sm font-medium">Knowledge Base (RAG)</p>
+                <p className="text-xs text-muted-foreground">Reuse previous AI answers to save tokens</p>
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-slate-200 text-sm font-medium">Auto-Save AI Responses</p>
-                  <p className="text-slate-500 text-xs mt-0.5">Automatically save AI responses to knowledge base for reuse</p>
-                </div>
-                <Switch checked={autoSaveKnowledge} onCheckedChange={setAutoSaveKnowledge} />
-              </div>
+              <Switch checked={ragEnabled} onCheckedChange={setRagEnabled} />
             </div>
 
-            <Button onClick={handleSaveAI} className="bg-violet-600 hover:bg-violet-500 text-white">
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              Save AI Settings
+            <div className="flex items-center justify-between py-2 border-t border-border">
+              <div>
+                <p className="text-sm font-medium">Auto-save AI Responses</p>
+                <p className="text-xs text-muted-foreground">Automatically store AI answers in knowledge base</p>
+              </div>
+              <Switch checked={autoSaveKnowledge} onCheckedChange={setAutoSaveKnowledge} />
+            </div>
+
+            <Button onClick={handleSaveAI} disabled={saveSettings.isPending} className="gap-2">
+              <CheckCircle2 className="w-4 h-4" />
+              {saveSettings.isPending ? "Saving..." : "Save AI Settings"}
             </Button>
           </CardContent>
         </Card>
 
-        {/* Notification Settings */}
-        <Card className="bg-white/5 border-white/10">
+        {/* Notifications */}
+        <Card>
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2">
-              <Bell className="w-5 h-5 text-cyan-400" />
-              <CardTitle className="text-white text-lg">Notifications</CardTitle>
+              <Bell className="w-5 h-5 text-sky-400" />
+              <CardTitle className="text-lg">Notifications</CardTitle>
             </div>
-            <CardDescription className="text-slate-400">
-              Choose which events trigger email and in-app notifications
-            </CardDescription>
+            <CardDescription>Control which alerts and reports you receive</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {[
-              { label: "Email Notifications", desc: "Receive notifications via email", value: emailNotifications, setter: setEmailNotifications },
-              { label: "New Lead Alerts", desc: "Get notified when a new lead is captured", value: leadAlerts, setter: setLeadAlerts },
-              { label: "Campaign Performance Reports", desc: "Weekly campaign performance summaries", value: campaignReports, setter: setCampaignReports },
-              { label: "Weekly Digest", desc: "A weekly summary of all platform activity", value: weeklyDigest, setter: setWeeklyDigest },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center justify-between py-1">
+              { key: "email_notifications", label: "Email Notifications", desc: "Receive updates via email", value: emailNotifications, set: setEmailNotifications },
+              { key: "lead_alerts", label: "New Lead Alerts", desc: "Notify when a new lead is added", value: leadAlerts, set: setLeadAlerts },
+              { key: "campaign_reports", label: "Campaign Reports", desc: "Weekly campaign performance summaries", value: campaignReports, set: setCampaignReports },
+              { key: "weekly_digest", label: "Weekly Digest", desc: "Summary of all activity across projects", value: weeklyDigest, set: setWeeklyDigest },
+            ].map(item => (
+              <div key={item.key} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                 <div>
-                  <p className="text-slate-200 text-sm font-medium">{item.label}</p>
-                  <p className="text-slate-500 text-xs mt-0.5">{item.desc}</p>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
                 </div>
-                <Switch checked={item.value} onCheckedChange={item.setter} />
+                <Switch checked={item.value} onCheckedChange={item.set} />
               </div>
             ))}
-
-            <Button onClick={handleSaveNotifications} className="bg-cyan-600 hover:bg-cyan-500 text-white mt-2">
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              Save Notification Preferences
+            <Button onClick={handleSaveNotifications} disabled={saveSettings.isPending} className="gap-2">
+              <CheckCircle2 className="w-4 h-4" />
+              {saveSettings.isPending ? "Saving..." : "Save Notifications"}
             </Button>
           </CardContent>
         </Card>
 
         {/* Platform Defaults */}
-        <Card className="bg-white/5 border-white/10">
+        <Card>
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2">
               <Globe className="w-5 h-5 text-emerald-400" />
-              <CardTitle className="text-white text-lg">Platform Defaults</CardTitle>
+              <CardTitle className="text-lg">Platform Defaults</CardTitle>
             </div>
-            <CardDescription className="text-slate-400">
-              Default settings applied to new projects (can be overridden per project)
-            </CardDescription>
+            <CardDescription>Default currency, timezone, and language for all projects</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Default Currency</Label>
+                <Label>Currency</Label>
                 <Select value={defaultCurrency} onValueChange={setDefaultCurrency}>
-                  <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a1a2e] border-white/10">
-                    {["USD", "INR", "EUR", "GBP", "AED", "SGD", "AUD", "CAD"].map((c) => (
-                      <SelectItem key={c} value={c} className="text-white focus:bg-white/10">{c}</SelectItem>
-                    ))}
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD — US Dollar</SelectItem>
+                    <SelectItem value="EUR">EUR — Euro</SelectItem>
+                    <SelectItem value="GBP">GBP — British Pound</SelectItem>
+                    <SelectItem value="INR">INR — Indian Rupee</SelectItem>
+                    <SelectItem value="AED">AED — UAE Dirham</SelectItem>
+                    <SelectItem value="SGD">SGD — Singapore Dollar</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-300">Timezone</Label>
+                <Label>Timezone</Label>
                 <Select value={timezone} onValueChange={setTimezone}>
-                  <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a1a2e] border-white/10">
-                    {["Asia/Kolkata", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"].map((tz) => (
-                      <SelectItem key={tz} value={tz} className="text-white focus:bg-white/10">{tz}</SelectItem>
-                    ))}
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Asia/Kolkata">Asia/Kolkata (IST)</SelectItem>
+                    <SelectItem value="America/New_York">America/New_York (EST)</SelectItem>
+                    <SelectItem value="America/Los_Angeles">America/Los_Angeles (PST)</SelectItem>
+                    <SelectItem value="Europe/London">Europe/London (GMT)</SelectItem>
+                    <SelectItem value="Asia/Dubai">Asia/Dubai (GST)</SelectItem>
+                    <SelectItem value="Asia/Singapore">Asia/Singapore (SGT)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-300">Language</Label>
+                <Label>Language</Label>
                 <Select value={language} onValueChange={setLanguage}>
-                  <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a1a2e] border-white/10">
-                    <SelectItem value="en" className="text-white focus:bg-white/10">English</SelectItem>
-                    <SelectItem value="hi" className="text-white focus:bg-white/10">Hindi</SelectItem>
-                    <SelectItem value="ar" className="text-white focus:bg-white/10">Arabic</SelectItem>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="hi">Hindi</SelectItem>
+                    <SelectItem value="ar">Arabic</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-
-            <Button onClick={handleSavePlatform} className="bg-emerald-600 hover:bg-emerald-500 text-white">
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              Save Platform Defaults
+            <Button onClick={handleSavePlatform} disabled={saveSettings.isPending} className="gap-2">
+              <CheckCircle2 className="w-4 h-4" />
+              {saveSettings.isPending ? "Saving..." : "Save Platform Defaults"}
             </Button>
           </CardContent>
         </Card>
 
         {/* Admin Panel (admin only) */}
         {isAdmin && (
-          <Card className="bg-white/5 border-white/10 border-violet-500/20">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-violet-400" />
-                <CardTitle className="text-white text-lg">Admin Panel</CardTitle>
-                <Badge className="bg-violet-600/20 text-violet-300 border-violet-500/30 text-xs">Admin Only</Badge>
-              </div>
-              <CardDescription className="text-slate-400">
-                Platform administration — user management, system health, and audit logs
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {[
-                { icon: Users, label: "User Management", desc: "View and manage all platform users", color: "text-blue-400" },
-                { icon: Database, label: "Database Health", desc: "Monitor database performance and connections", color: "text-emerald-400" },
-                { icon: Key, label: "API Key Management", desc: "Manage platform-level API keys and integrations", color: "text-amber-400" },
-                { icon: Zap, label: "Usage Analytics", desc: "AI token usage, API calls, and cost tracking", color: "text-cyan-400" },
-              ].map((item) => (
+          <>
+            {/* User Management */}
+            <Card className="border-violet-500/20">
+              <CardHeader className="pb-3">
                 <button
-                  key={item.label}
-                  onClick={() => toast.info(`${item.label} — coming soon`)}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all duration-200 text-left group"
+                  className="flex items-center justify-between w-full text-left"
+                  onClick={() => setShowUsers(v => !v)}
                 >
-                  <item.icon className={`w-5 h-5 ${item.color} shrink-0`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-slate-200 text-sm font-medium">{item.label}</p>
-                    <p className="text-slate-500 text-xs truncate">{item.desc}</p>
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-violet-400" />
+                    <CardTitle className="text-lg">User Management</CardTitle>
+                    <Badge className="bg-violet-600/20 text-violet-300 border-violet-500/30 text-xs">Admin</Badge>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" />
+                  {showUsers ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                 </button>
-              ))}
-            </CardContent>
-          </Card>
+                <CardDescription>View and manage all platform users and their roles</CardDescription>
+              </CardHeader>
+              {showUsers && (
+                <CardContent>
+                  <div className="flex justify-end mb-3">
+                    <Button size="sm" variant="outline" onClick={() => refetchUsers()} className="gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5" />Refresh
+                    </Button>
+                  </div>
+                  {usersLoading ? (
+                    <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {allUsers?.map(u => (
+                        <div key={u.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/40 border border-border">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                            {u.name?.charAt(0)?.toUpperCase() || "U"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{u.name || "—"}</p>
+                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                          </div>
+                          <Select
+                            value={u.role}
+                            onValueChange={(role) => updateRole.mutate({ userId: u.id, role: role as "admin" | "user" })}
+                          >
+                            <SelectTrigger className="w-28 h-7 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="user">User</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                      {!allUsers?.length && (
+                        <p className="text-sm text-muted-foreground text-center py-4">No users found</p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+
+            {/* Usage Analytics */}
+            <Card className="border-cyan-500/20">
+              <CardHeader className="pb-3">
+                <button
+                  className="flex items-center justify-between w-full text-left"
+                  onClick={() => setShowUsage(v => !v)}
+                >
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-cyan-400" />
+                    <CardTitle className="text-lg">Usage Analytics</CardTitle>
+                    <Badge className="bg-cyan-600/20 text-cyan-300 border-cyan-500/30 text-xs">Admin</Badge>
+                  </div>
+                  {showUsage ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                <CardDescription>AI call counts and knowledge base usage across the platform</CardDescription>
+              </CardHeader>
+              {showUsage && (
+                <CardContent>
+                  <div className="flex justify-end mb-3">
+                    <Button size="sm" variant="outline" onClick={() => refetchUsage()} className="gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5" />Refresh
+                    </Button>
+                  </div>
+                  {usageLoading ? (
+                    <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-10 rounded-lg" />)}</div>
+                  ) : usageStats ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl bg-muted/40 border border-border text-center">
+                          <p className="text-2xl font-bold text-cyan-400">{usageStats.totalAiCalls}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Total AI Calls</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-muted/40 border border-border text-center">
+                          <p className="text-2xl font-bold text-violet-400">{usageStats.totalKnowledgeEntries}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Knowledge Entries</p>
+                        </div>
+                      </div>
+                      {Object.keys(usageStats.byCategory).length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium mb-2">By Category</p>
+                          <div className="space-y-1.5">
+                            {Object.entries(usageStats.byCategory)
+                              .sort(([, a], [, b]) => (b as number) - (a as number))
+                              .map(([cat, count]) => (
+                                <div key={cat} className="flex items-center justify-between text-sm px-3 py-1.5 rounded-lg bg-muted/30">
+                                  <span className="text-muted-foreground capitalize">{cat.replace(/_/g, " ")}</span>
+                                  <Badge variant="outline" className="text-xs">{count as number}</Badge>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">No usage data yet</p>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+          </>
         )}
 
         {/* Account Info */}
-        <Card className="bg-white/5 border-white/10">
+        <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <Palette className="w-5 h-5 text-pink-400" />
-              <CardTitle className="text-white text-lg">Account</CardTitle>
+              <UserCog className="w-5 h-5 text-pink-400" />
+              <CardTitle className="text-lg">Account</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-4 p-3 rounded-xl bg-white/5 border border-white/10">
+            <div className="flex items-center gap-4 p-3 rounded-xl bg-muted/40 border border-border">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">
                 {user?.name?.charAt(0)?.toUpperCase() || "U"}
               </div>
               <div>
-                <p className="text-white font-medium">{user?.name || "User"}</p>
-                <p className="text-slate-400 text-sm">{user?.email || "No email"}</p>
+                <p className="font-medium">{user?.name || "User"}</p>
+                <p className="text-muted-foreground text-sm">{user?.email || "No email"}</p>
               </div>
-              <Badge className="ml-auto bg-white/10 text-slate-300 border-white/10 capitalize">
-                {user?.role || "user"}
-              </Badge>
+              <Badge className="ml-auto capitalize">{user?.role || "user"}</Badge>
             </div>
           </CardContent>
         </Card>

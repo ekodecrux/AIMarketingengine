@@ -21,14 +21,7 @@ import { LEAD_STAGE_LABELS } from "../../../shared/types";
 
 const CHART_COLORS = ["#7c3aed", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444"];
 
-const mockLeadTrend = [
-  { month: "Feb", leads: 12, revenue: 4200 },
-  { month: "Mar", leads: 19, revenue: 7800 },
-  { month: "Apr", leads: 15, revenue: 5600 },
-  { month: "May", leads: 28, revenue: 11200 },
-  { month: "Jun", leads: 34, revenue: 15800 },
-  { month: "Jul", leads: 41, revenue: 19400 },
-];
+// No mock data — trend is loaded from DB via trpc.dashboard.leadTrend
 
 function MetricCard({ label, value, sub, icon, color, trend }: {
   label: string; value: string | number; sub?: string;
@@ -69,6 +62,10 @@ export default function Dashboard() {
   const { data: projectStats } = trpc.dashboard.projectStats.useQuery(
     { projectId: activeProjectId! },
     { enabled: !!activeProjectId }
+  );
+  const { data: leadTrend = [] } = trpc.dashboard.leadTrend.useQuery(
+    { months: 6 },
+    { enabled: isAuthenticated }
   );
 
   if (loading) return (
@@ -131,14 +128,23 @@ export default function Dashboard() {
             </div>
           )}
 
-          {stats && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-              <MetricCard label="Total Projects" value={stats.projects ?? 0} icon={<Layers size={18} />} color="bg-violet-500/15 text-violet-400" trend={12} />
-              <MetricCard label="Total Leads" value={stats.leads ?? 0} sub="Across all projects" icon={<Users size={18} />} color="bg-sky-500/15 text-sky-400" trend={24} />
-              <MetricCard label="Revenue Closed" value={`${currencySymbol}${Number(stats.revenue ?? 0).toLocaleString()}`} sub="Closed won deals" icon={<DollarSign size={18} />} color="bg-emerald-500/15 text-emerald-400" trend={18} />
-              <MetricCard label="Conversion Rate" value={`${stats.conversionRate ?? 0}%`} sub="Lead to close" icon={<Target size={18} />} color="bg-amber-500/15 text-amber-400" trend={5} />
-            </div>
-          )}
+          {stats && (() => {
+            // Compute real MoM trends from leadTrend data
+            const momLeads = leadTrend.length >= 2
+              ? (() => { const p = leadTrend[leadTrend.length - 2]?.leads || 0; const c = leadTrend[leadTrend.length - 1]?.leads || 0; return p > 0 ? Math.round(((c - p) / p) * 100) : undefined; })()
+              : undefined;
+            const momRevenue = leadTrend.length >= 2
+              ? (() => { const p = leadTrend[leadTrend.length - 2]?.revenue || 0; const c = leadTrend[leadTrend.length - 1]?.revenue || 0; return p > 0 ? Math.round(((c - p) / p) * 100) : undefined; })()
+              : undefined;
+            return (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
+                <MetricCard label="Total Projects" value={stats.projects ?? 0} icon={<Layers size={18} />} color="bg-violet-500/15 text-violet-400" />
+                <MetricCard label="Total Leads" value={stats.leads ?? 0} sub="Across all projects" icon={<Users size={18} />} color="bg-sky-500/15 text-sky-400" trend={momLeads} />
+                <MetricCard label="Revenue Closed" value={`${currencySymbol}${Number(stats.revenue ?? 0).toLocaleString()}`} sub="Closed won deals" icon={<DollarSign size={18} />} color="bg-emerald-500/15 text-emerald-400" trend={momRevenue} />
+                <MetricCard label="Conversion Rate" value={`${stats.conversionRate ?? 0}%`} sub="Lead to close" icon={<Target size={18} />} color="bg-amber-500/15 text-amber-400" />
+              </div>
+            );
+          })()}
           {statsLoading && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[1,2,3,4].map(i => <Skeleton key={i} className="h-32 rounded-xl" />)}
@@ -152,12 +158,19 @@ export default function Dashboard() {
                   <h3 className="font-semibold text-foreground">Lead & Revenue Trend</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">Last 6 months performance</p>
                 </div>
-                <Badge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
-                  <ArrowUpRight size={12} className="mr-1" />+24% leads
-                </Badge>
+                {leadTrend.length >= 2 && (() => {
+                  const prev = leadTrend[leadTrend.length - 2]?.leads || 0;
+                  const curr = leadTrend[leadTrend.length - 1]?.leads || 0;
+                  const pct = prev > 0 ? Math.round(((curr - prev) / prev) * 100) : 0;
+                  return (
+                    <Badge variant="outline" className={pct >= 0 ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" : "text-rose-400 border-rose-500/30 bg-rose-500/10"}>
+                      <ArrowUpRight size={12} className={`mr-1 ${pct < 0 ? "rotate-180" : ""}`} />{pct >= 0 ? "+" : ""}{pct}% leads
+                    </Badge>
+                  );
+                })()}
               </div>
               <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={mockLeadTrend}>
+                <AreaChart data={leadTrend}>
                   <defs>
                     <linearGradient id="leadGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />

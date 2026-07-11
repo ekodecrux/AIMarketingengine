@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { scrapeWebsite } from "./websiteScraper";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
 import { sdk } from "./_core/sdk";
@@ -67,6 +68,12 @@ import {
   upsertProjectApiKey,
   deleteProjectApiKey,
   getUserByEmailAndPassword,
+  getLeadMonthlyTrend,
+  getUsageStats,
+  getAllUsers,
+  updateUserRole,
+  getGlobalSettings,
+  setGlobalSettings,
 } from "./db";
 import { z } from "zod";
 
@@ -230,52 +237,91 @@ export const appRouter = router({
     extractFromUrl: protectedProcedure
       .input(z.object({ projectId: z.number(), url: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        const topicKey = `profile_extract_${input.url}`;
-        const content = await aiWithKnowledge(
-          ctx.user.id, input.projectId, "profile", topicKey,
-          `Extract business profile from ${input.url}`,
-          MARKETING_SYSTEM_PROMPT,
-          `Analyze this business website URL and extract a comprehensive business profile: ${input.url}
-          
-Return a JSON object with these fields:
-- companyName: string
-- industry: string  
-- description: string (2-3 sentences about what they do)
-- targetAudience: string (who are their ideal customers)
-- valueProposition: string (what makes them unique)
-- products: string (main products/services)
-- toneOfVoice: string (professional/casual/technical/friendly)
-- location: string (if detectable)
-- marketingOpportunities: string (3-5 key opportunities you see)
-- suggestedChannels: string (best marketing channels for this business)`,
-          {
-            type: "object",
-            properties: {
-              companyName: { type: "string" },
-              industry: { type: "string" },
-              description: { type: "string" },
-              targetAudience: { type: "string" },
-              valueProposition: { type: "string" },
-              products: { type: "string" },
-              toneOfVoice: { type: "string" },
-              location: { type: "string" },
-              marketingOpportunities: { type: "string" },
-              suggestedChannels: { type: "string" },
+        // Step 1: Real HTTP fetch of the website (homepage + sub-pages)
+        const scraped = await scrapeWebsite(input.url);
+        if (scraped.error || !scraped.combinedText) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: scraped.error || `Could not fetch content from ${input.url}. The site may be blocking automated access or require JavaScript rendering.`,
+          });
+        }
+
+        // Step 2: AI extraction from REAL page content — no hallucination
+        const pagesScraped = scraped.pages.map(p => p.url).join(", ");
+        const content = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a business intelligence analyst. Extract accurate business profile information ONLY from the actual website content provided. Do NOT invent, assume, or hallucinate any information not present in the content. If a field cannot be determined from the content, use an empty string.
+
+Pages scraped: ${pagesScraped}`,
             },
-            required: ["companyName", "industry", "description", "targetAudience", "valueProposition", "products", "toneOfVoice", "location", "marketingOpportunities", "suggestedChannels"],
-            additionalProperties: false,
+            {
+              role: "user",
+              content: `Extract a comprehensive business profile from this actual website content:
+
+${scraped.combinedText}
+
+Return a JSON object with ONLY information found in the above content:
+- companyName: string (exact company name from the site)
+- industry: string (what sector/industry they operate in)
+- description: string (2-3 sentences describing what they actually do, from their own words)
+- targetAudience: string (who their customers are, based on site content)
+- valueProposition: string (their unique selling points as stated on the site)
+- products: string (actual products/services listed on the site)
+- toneOfVoice: string (professional/casual/technical/friendly — inferred from writing style)
+- location: string (city/country if mentioned on the site)
+- marketingOpportunities: string (3-5 opportunities based on what the site lacks or could improve)
+- suggestedChannels: string (best marketing channels for this specific business type)`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "business_profile",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  companyName: { type: "string" },
+                  industry: { type: "string" },
+                  description: { type: "string" },
+                  targetAudience: { type: "string" },
+                  valueProposition: { type: "string" },
+                  products: { type: "string" },
+                  toneOfVoice: { type: "string" },
+                  location: { type: "string" },
+                  marketingOpportunities: { type: "string" },
+                  suggestedChannels: { type: "string" },
+                },
+                required: ["companyName", "industry", "description", "targetAudience", "valueProposition", "products", "toneOfVoice", "location", "marketingOpportunities", "suggestedChannels"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        // Extract text from InvokeResult
+        const rawText = (() => {
+          const msg = content.choices?.[0]?.message?.content;
+          if (typeof msg === "string") return msg;
+          if (Array.isArray(msg)) {
+            const t = msg.find((p: any) => p.type === "text");
+            return (t as any)?.text || "";
           }
-        );
+          return "";
+        })();
+
         let parsed: any = {};
-        try { parsed = JSON.parse(content); } catch {}
+        try { parsed = JSON.parse(rawText); } catch {}
         await upsertBusinessProfile({
           projectId: input.projectId,
           ...parsed,
           extractionSource: "website",
           sourceUrl: input.url,
-          rawExtraction: content,
+          rawExtraction: rawText,
         });
-        return parsed;
+        return { ...parsed, pagesScraped: scraped.pages.length, pageUrls: scraped.pages.map(p => p.url) };
       }),
 
     save: protectedProcedure
@@ -1205,8 +1251,9 @@ Provide:
             ctx.user.id, input.projectId, "lead_scrape", topicKey,
             `Find leads: ${input.targetIndustry} in ${input.targetLocation}`,
             MARKETING_SYSTEM_PROMPT,
-            `You are a B2B lead generation expert. Generate a list of 15-20 realistic, high-quality potential leads based on this target profile:
+            `You are a B2B sales strategist. Generate 15-20 AI-created prospect profiles that represent the ideal customer archetype for this target profile. These are illustrative examples to help the user understand who to target and how to approach them — not real people.
 
+Target Profile:
 Industry: ${input.targetIndustry || "Any"}
 Location: ${input.targetLocation || "Any"}
 Company Size: ${input.targetCompanySize || "Any"}
@@ -1214,7 +1261,7 @@ Job Titles to Target: ${input.targetJobTitles || "Decision makers"}
 Keywords/Niche: ${input.targetKeywords || ""}
 Additional Context: ${input.additionalContext || ""}
 
-Return a JSON array of leads. For each lead, generate realistic but fictional data that matches the profile:
+Return a JSON array of prospect profiles. Make each profile realistic and specific to the target market:
 [
   {
     "name": "Full Name",
@@ -1286,6 +1333,10 @@ Make the data realistic for the target market. Include a mix of warm and cold le
   dashboard: router({
     consolidated: protectedProcedure.query(({ ctx }) => getConsolidatedStats(ctx.user.id)),
 
+    leadTrend: protectedProcedure
+      .input(z.object({ months: z.number().min(1).max(24).default(6) }))
+      .query(({ ctx, input }) => getLeadMonthlyTrend(ctx.user.id, input.months)),
+
     projectStats: protectedProcedure
       .input(z.object({ projectId: z.number() }))
       .query(async ({ input }) => {
@@ -1313,6 +1364,45 @@ Make the data realistic for the target market. Include a mix of warm and cold le
   }),
 
   // ─── API Keys ────────────────────────────────────────────────────────────────
+
+  // ─── Global Settings ──────────────────────────────────────────────────────────
+  globalSettings: router({
+    get: protectedProcedure
+      .input(z.object({
+        keys: z.array(z.string()),
+      }))
+      .query(({ ctx, input }) => getGlobalSettings(ctx.user.id, input.keys)),
+
+    save: protectedProcedure
+      .input(z.object({
+        settings: z.record(z.string(), z.string()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await setGlobalSettings(ctx.user.id, input.settings);
+        return { success: true };
+      }),
+  }),
+
+  // ─── Admin ────────────────────────────────────────────────────────────────────
+  admin: router({
+    listUsers: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      return getAllUsers();
+    }),
+
+    updateRole: protectedProcedure
+      .input(z.object({ userId: z.number(), role: z.enum(["admin", "user"]) }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        return updateUserRole(input.userId, input.role);
+      }),
+
+    usageStats: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      return getUsageStats(ctx.user.id);
+    }),
+  }),
+
   apiKeys: router({
     list: protectedProcedure
       .input(z.object({ projectId: z.number() }))

@@ -116,8 +116,8 @@
 - [x] API Keys settings page: Google Analytics, SendGrid/email campaign keys stored securely in Integrations
 - [x] Export Marketing Plan as PDF (beautifully formatted, downloadable)
 - [x] Customer-facing CRM pipeline (client portal: full kanban board, lead stage updates, notes, conversion tracking)
-- [ ] CRM kanban: add search bar + filter by lead value, stage, source
-- [ ] Marketing Plan PDF: company logo upload in Business Profile, embedded in PDF header
+- [x] CRM kanban: add search bar + filter by lead value, stage, source
+- [ ] Marketing Plan PDF: company logo upload in Business Profile, embedded in PDF header (logo upload UI exists in BusinessProfile, S3 wiring pending)
 
 ## New Features (Round 3)
 - [x] Demo login page (/login) with email/password form and Admin Demo / Client Demo quick-fill buttons
@@ -129,3 +129,12 @@
 - [x] Update Home page with Demo Login button in nav and hero CTA
 - [x] Update Dashboard unauthenticated fallback to show Demo Login button
 - [x] globalSettings table created in DB for platform-level config
+
+## Stub/Mock Elimination (Everything Real)
+- [x] Business profile extraction: real HTTP fetch + multi-page scrape (homepage + about + services + contact) via websiteScraper.ts, accurate AI extraction from actual page content
+- [x] Dashboard trend chart: replace mockLeadTrend with real DB-derived monthly aggregation of leads and closed revenue per month
+- [x] GlobalSettings: wire AI model, notifications, platform defaults to DB via globalSettings table (load on mount, persist on save)
+- [x] Lead Scraper: rename to "AI Lead Prospector", make UI honest (AI-generated prospects, not real scraped data), add clear disclaimer
+- [ ] Social Integrations: validate credentials with real API ping per platform on connect (LinkedIn token check, Meta token debug, Google token info, etc.)
+- [x] Admin Panel: implement real User Management (list all users, change role) and Usage Analytics (AI call count from knowledge table)
+- [x] Dashboard metric trend badges computed from real DB data (month-over-month calculation)
