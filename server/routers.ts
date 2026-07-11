@@ -39,6 +39,8 @@ import {
   getContentItems,
   getKeywords,
   getKnowledgeEntries,
+  deleteKnowledge,
+  updateKnowledgeContent,
   getLeadStats,
   getLeads,
   getMarketingPlans,
@@ -238,6 +240,15 @@ export const appRouter = router({
     extractFromUrl: protectedProcedure
       .input(z.object({ projectId: z.number(), url: z.string() }))
       .mutation(async ({ ctx, input }) => {
+        // Step 0: Check RAG knowledge base first — avoid re-scraping the same URL
+        const ragKey = `website_extraction:${input.url.toLowerCase().trim()}`;
+        const cached = await findKnowledge(ctx.user.id, input.projectId, "profile", ragKey);
+        if (cached) {
+          try {
+            const cachedParsed = JSON.parse(cached.content);
+            return { ...cachedParsed, pagesScraped: 0, pageUrls: [], fromCache: true };
+          } catch { /* fall through to re-scrape if cache is malformed */ }
+        }
         // Step 1: Real HTTP fetch of the website (homepage + sub-pages)
         const scraped = await scrapeWebsite(input.url);
         if (scraped.error || !scraped.combinedText) {
@@ -322,7 +333,18 @@ Return a JSON object with ONLY information found in the above content:
           sourceUrl: input.url,
           rawExtraction: rawText,
         });
-        return { ...parsed, pagesScraped: scraped.pages.length, pageUrls: scraped.pages.map(p => p.url) };
+        // Save to RAG knowledge base scoped to this project — future extractions of same URL return instantly
+        await saveKnowledge({
+          userId: ctx.user.id,
+          projectId: input.projectId,
+          category: "profile",
+          topicKey: ragKey,
+          question: `Business profile extraction from ${input.url}`,
+          content: rawText,
+          source: "ai",
+          hitCount: 0,
+        });
+        return { ...parsed, pagesScraped: scraped.pages.length, pageUrls: scraped.pages.map(p => p.url), fromCache: false };
       }),
 
     save: protectedProcedure
@@ -1125,6 +1147,20 @@ Return a complete campaign plan including:
     list: protectedProcedure
       .input(z.object({ projectId: z.number().optional() }))
       .query(({ ctx, input }) => getKnowledgeEntries(ctx.user.id, input.projectId)),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await deleteKnowledge(input.id, ctx.user.id);
+        return { success: true };
+      }),
+
+    update: protectedProcedure
+      .input(z.object({ id: z.number(), content: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        await updateKnowledgeContent(input.id, ctx.user.id, input.content);
+        return { success: true };
+      }),
 
     ask: protectedProcedure
       .input(z.object({

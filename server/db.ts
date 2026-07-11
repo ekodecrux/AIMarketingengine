@@ -418,6 +418,18 @@ export async function saveKnowledge(data: typeof knowledgeEntries.$inferInsert) 
   await db.insert(knowledgeEntries).values(data);
 }
 
+export async function deleteKnowledge(id: number, userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(knowledgeEntries).where(and(eq(knowledgeEntries.id, id), eq(knowledgeEntries.userId, userId)));
+}
+
+export async function updateKnowledgeContent(id: number, userId: number, content: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(knowledgeEntries).set({ content }).where(and(eq(knowledgeEntries.id, id), eq(knowledgeEntries.userId, userId)));
+}
+
 export async function getKnowledgeEntries(userId: number, projectId?: number): Promise<KnowledgeEntry[]> {
   const db = await getDb();
   if (!db) return [];

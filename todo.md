@@ -138,3 +138,10 @@
 - [x] Social Integrations: validate credentials with real API ping per platform on connect (LinkedIn /v2/userinfo, Meta /me + debug_token, Google tokeninfo, Twitter /users/me, WhatsApp /me, Quora /ads/v0/me)
 - [x] Admin Panel: implement real User Management (list all users, change role) and Usage Analytics (AI call count from knowledge table)
 - [x] Dashboard metric trend badges computed from real DB data (month-over-month calculation)
+
+## RAG / Knowledge Base — Project-Scoped Storage
+- [x] extractFromUrl (business profile): save AI extraction result to knowledge base scoped to projectId (RAG lookup first, save on cache miss)
+- [x] All aiWithKnowledge calls: verified all 11 calls pass correct projectId — fully project-scoped
+- [x] Knowledge Base UI: per-project page with category-colored badges, search, filter, stats (entries/hits/categories), delete, edit dialog
+- [x] Knowledge base lookup: hitCount incremented on RAG hit, cached result returned (verified in db.ts findKnowledge)
+- [x] Knowledge base link in project sidebar navigation (already present as /projects/:id/knowledge)

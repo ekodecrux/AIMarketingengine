@@ -4,13 +4,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useParams } from "wouter";
 import { useProject } from "@/contexts/ProjectContext";
-import { useEffect, useState } from "react";
-import { Brain, Sparkles, Zap, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Brain, Sparkles, Zap, BookOpen, ChevronDown, ChevronUp, Trash2, Edit3, CheckCircle2, X, TrendingUp, Filter, RefreshCw, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Streamdown } from "streamdown";
+
+const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
+  plan:          { label: "Marketing Plan",     color: "bg-violet-500/15 text-violet-400 border-violet-500/20" },
+  keyword:       { label: "Keywords",           color: "bg-sky-500/15 text-sky-400 border-sky-500/20" },
+  competitor:    { label: "Competitor Analysis", color: "bg-amber-500/15 text-amber-400 border-amber-500/20" },
+  content:       { label: "Content",            color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" },
+  lead_strategy: { label: "Lead Strategy",      color: "bg-pink-500/15 text-pink-400 border-pink-500/20" },
+  retargeting:   { label: "Retargeting",        color: "bg-orange-500/15 text-orange-400 border-orange-500/20" },
+  seo:           { label: "SEO",                color: "bg-cyan-500/15 text-cyan-400 border-cyan-500/20" },
+  backlinks:     { label: "Backlinks",          color: "bg-indigo-500/15 text-indigo-400 border-indigo-500/20" },
+  whatsapp:      { label: "WhatsApp",           color: "bg-green-500/15 text-green-400 border-green-500/20" },
+  qa:            { label: "Q&A",                color: "bg-rose-500/15 text-rose-400 border-rose-500/20" },
+  lead_scrape:   { label: "Lead Prospecting",   color: "bg-teal-500/15 text-teal-400 border-teal-500/20" },
+  profile:       { label: "Business Profile",   color: "bg-blue-500/15 text-blue-400 border-blue-500/20" },
+};
+function catInfo(cat: string) {
+  return CATEGORY_LABELS[cat] || { label: cat, color: "bg-muted text-muted-foreground border-border" };
+}
 
 const SUGGESTED_QUESTIONS = [
   "What is the best SEO strategy for my business?",
@@ -32,6 +53,10 @@ export default function KnowledgeBase() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string>("");
   const [expandedEntry, setExpandedEntry] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [editEntry, setEditEntry] = useState<{ id: number; content: string } | null>(null);
+  const [editContent, setEditContent] = useState("");
 
   const { data: entries, isLoading, refetch } = trpc.knowledge.list.useQuery({ projectId }, { enabled: !!projectId });
 
@@ -43,6 +68,29 @@ export default function KnowledgeBase() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const deleteEntry = trpc.knowledge.delete.useMutation({
+    onSuccess: () => { refetch(); toast.success("Entry deleted — AI will regenerate next time"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const updateEntry = trpc.knowledge.update.useMutation({
+    onSuccess: () => { refetch(); setEditEntry(null); toast.success("Entry updated"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const filteredEntries = useMemo(() => {
+    if (!entries) return [];
+    return entries.filter(e => {
+      const matchCat = filterCategory === "all" || e.category === filterCategory;
+      const q = search.toLowerCase();
+      const matchSearch = !q || e.topicKey.toLowerCase().includes(q) || (e.question || "").toLowerCase().includes(q) || e.content.toLowerCase().includes(q);
+      return matchCat && matchSearch;
+    });
+  }, [entries, search, filterCategory]);
+
+  const allCategories = useMemo(() => Array.from(new Set((entries || []).map(e => e.category))).sort(), [entries]);
+  const totalHits = (entries || []).reduce((s, e) => s + (e.hitCount || 0), 0);
 
   const handleAsk = (q?: string) => {
     const q2 = q || question;
@@ -119,36 +167,106 @@ export default function KnowledgeBase() {
             </div>
           )}
 
+          {/* RAG stats */}
+          {entries && entries.length > 0 && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="card-premium p-3 text-center">
+                <p className="text-xl font-bold text-violet-400">{entries.length}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Stored Entries</p>
+              </div>
+              <div className="card-premium p-3 text-center">
+                <p className="text-xl font-bold text-emerald-400">{totalHits}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">AI Calls Saved</p>
+              </div>
+              <div className="card-premium p-3 text-center">
+                <p className="text-xl font-bold text-sky-400">{allCategories.length}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Categories</p>
+              </div>
+            </div>
+          )}
+
+          {/* RAG explanation */}
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-violet-500/5 border border-violet-500/15">
+            <Zap size={14} className="text-violet-400 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <strong className="text-foreground">Project-scoped RAG:</strong> Every AI output for this project is stored here. Future requests matching the same topic return the cached answer instantly — no AI call needed. Delete an entry to force a fresh AI generation. Edit to refine the cached answer.
+            </p>
+          </div>
+
           {/* Knowledge history */}
           {isLoading && <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>}
 
           {entries && entries.length > 0 && (
             <div className="card-premium overflow-hidden">
-              <div className="p-4 border-b border-border flex items-center gap-2">
+              <div className="p-4 border-b border-border flex items-center gap-3">
                 <BookOpen size={16} className="text-primary" />
-                <h3 className="font-semibold text-foreground">Knowledge History ({entries.length})</h3>
+                <h3 className="font-semibold text-foreground">Knowledge Entries ({filteredEntries.length}/{entries.length})</h3>
+                <div className="ml-auto flex gap-2">
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-7 h-7 text-xs w-40 bg-muted border-border" />
+                  </div>
+                  <Select value={filterCategory} onValueChange={setFilterCategory}>
+                    <SelectTrigger className="h-7 text-xs w-36">
+                      <Filter size={11} className="mr-1 text-muted-foreground" />
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All categories</SelectItem>
+                      {allCategories.map(cat => (
+                        <SelectItem key={cat} value={cat}>{catInfo(cat).label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => refetch()}>
+                    <RefreshCw size={11} />Refresh
+                  </Button>
+                </div>
               </div>
               <div className="divide-y divide-border">
-                {entries.map(entry => (
+                {filteredEntries.map(entry => (
                   <div key={entry.id} className="px-4 py-3">
                     <button className="w-full text-left flex items-start justify-between gap-3"
                       onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground">{entry.question || entry.topicKey}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <Badge variant="outline" className="text-xs capitalize">{entry.category}</Badge>
-                          <p className="text-xs text-muted-foreground">{new Date(entry.createdAt).toLocaleDateString()}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className={cn("text-xs", catInfo(entry.category).color)}>{catInfo(entry.category).label}</Badge>
+                          {(entry.hitCount || 0) > 0 && (
+                            <Badge variant="outline" className="text-xs text-emerald-400 border-emerald-500/20 bg-emerald-500/10 gap-1">
+                              <TrendingUp size={9} />{entry.hitCount} hit{entry.hitCount !== 1 ? "s" : ""}
+                            </Badge>
+                          )}
+                          <p className="text-xs text-muted-foreground ml-auto">{new Date(entry.createdAt).toLocaleDateString()}</p>
                         </div>
+                        <p className="text-sm font-medium text-foreground mt-1 truncate">{entry.question || entry.topicKey}</p>
                       </div>
-                      {expandedEntry === entry.id ? <ChevronUp size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" /> : <ChevronDown size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" />}
+                      {expandedEntry === entry.id ? <ChevronUp size={16} className="text-muted-foreground flex-shrink-0 mt-1" /> : <ChevronDown size={16} className="text-muted-foreground flex-shrink-0 mt-1" />}
                     </button>
-                    {expandedEntry === entry.id && entry.content && (
-                      <div className="mt-3 pl-0 prose prose-invert max-w-none text-xs leading-relaxed text-muted-foreground">
-                        <Streamdown>{`${entry.content.substring(0, 800)}${entry.content.length > 800 ? "..." : ""}`}</Streamdown>
-                      </div>
+                    {expandedEntry === entry.id && (
+                      <>
+                        {entry.content && (
+                          <div className="mt-3 prose prose-invert max-w-none text-xs leading-relaxed text-muted-foreground">
+                            <Streamdown>{`${entry.content.substring(0, 800)}${entry.content.length > 800 ? "..." : ""}`}</Streamdown>
+                          </div>
+                        )}
+                        <div className="flex gap-2 mt-3 pt-2 border-t border-border">
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5"
+                            onClick={e => { e.stopPropagation(); setEditEntry({ id: entry.id, content: entry.content }); setEditContent(entry.content); }}>
+                            <Edit3 size={11} />Edit
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-rose-400 hover:text-rose-400 hover:bg-rose-500/10"
+                            onClick={e => { e.stopPropagation(); deleteEntry.mutate({ id: entry.id }); }}
+                            disabled={deleteEntry.isPending}>
+                            <Trash2 size={11} />Delete
+                          </Button>
+                        </div>
+                      </>
                     )}
                   </div>
                 ))}
+                {filteredEntries.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-6">No entries match your filter</p>
+                )}
               </div>
             </div>
           )}
@@ -164,6 +282,34 @@ export default function KnowledgeBase() {
           )}
         </div>
       </div>
+
+      {/* Edit dialog */}
+      {editEntry && (
+        <Dialog open={!!editEntry} onOpenChange={() => setEditEntry(null)}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit3 size={16} className="text-primary" />Edit Knowledge Entry
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground">Changes take effect immediately — this cached answer will be returned for future matching requests in this project.</p>
+            </DialogHeader>
+            <Textarea
+              value={editContent}
+              onChange={e => setEditContent(e.target.value)}
+              className="min-h-56 bg-muted border-border font-mono text-xs resize-none"
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditEntry(null)} className="flex-1 gap-1.5">
+                <X size={14} />Cancel
+              </Button>
+              <Button className="flex-1 gap-1.5 btn-glow" disabled={updateEntry.isPending}
+                onClick={() => updateEntry.mutate({ id: editEntry.id, content: editContent })}>
+                <CheckCircle2 size={14} />{updateEntry.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </AppLayout>
   );
 }
