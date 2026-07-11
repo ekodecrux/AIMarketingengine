@@ -24,11 +24,10 @@ import {
   Users,
   Zap,
 } from "lucide-react";
-import { ReactNode, useState, useRef } from "react";
+import { ReactNode, useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
-import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
 import { Skeleton } from "./ui/skeleton";
 import {
@@ -67,7 +66,18 @@ const projectNav: NavItem[] = [
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, loading, isAuthenticated, logout } = useAuth();
-  const { activeProjectId, setActiveProjectId } = useProject();
+  const { activeProjectId, setActiveProjectId, setCurrency } = useProject();
+
+  // Auto-sync currency from business profile whenever project changes
+  const { data: profileForCurrency } = trpc.businessProfile.get.useQuery(
+    { projectId: activeProjectId! },
+    { enabled: !!activeProjectId, staleTime: 30_000 }
+  );
+  useEffect(() => {
+    if (profileForCurrency?.currency) {
+      setCurrency(profileForCurrency.currency);
+    }
+  }, [profileForCurrency?.currency]);
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 

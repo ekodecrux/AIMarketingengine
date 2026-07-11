@@ -108,3 +108,6 @@
 - [x] Keywords: auto-load business profile context for AI recommendations
 - [x] Add currency selector (INR/USD/EUR/GBP/AED/SGD etc.) to Business Profile
 - [x] Use configured currency symbol everywhere: dashboard, campaigns, leads, marketing plan, ROI
+- [x] Fix currency not reflecting in Marketing Plan and all other pages after change in Business Profile
+- [x] Fix currency not reflecting in Marketing Plan and all other pages after change in Business Profile
+- [x] Fix Business Profile form resetting when navigating to other menu and coming back

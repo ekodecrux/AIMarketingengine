@@ -30,19 +30,31 @@ export default function BusinessProfile() {
     { enabled: !!projectId, staleTime: 0 } // Always fetch fresh data
   );
 
-  const [form, setForm] = useState({
-    companyName: "", industry: "", description: "", targetAudience: "",
-    valueProposition: "", products: "", toneOfVoice: "", location: "",
-    sourceUrl: "", currency: "USD",
+    const FORM_CACHE_KEY = `nexusai_bp_form_${projectId}`;
+  type ProfileForm = { companyName: string; industry: string; description: string; targetAudience: string; valueProposition: string; products: string; toneOfVoice: string; location: string; sourceUrl: string; currency: string; };
+  // Load from localStorage first (instant, no flash), then sync from DB
+  const [form, setForm] = useState<ProfileForm>(() => {
+    try {
+      const cached = localStorage.getItem(`nexusai_bp_form_${projectId}`);
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return { companyName: "", industry: "", description: "", targetAudience: "",
+      valueProposition: "", products: "", toneOfVoice: "", location: "",
+      sourceUrl: "", currency: "USD" };
   });
   const [saved, setSaved] = useState(false);
 
-  // Populate form from DB — only once on first load
+  // Persist form to localStorage on every change
+  useEffect(() => {
+    try { localStorage.setItem(FORM_CACHE_KEY, JSON.stringify(form)); } catch {}
+  }, [form, FORM_CACHE_KEY]);
+
+  // Sync from DB — always overwrite cache with fresh DB data
   useEffect(() => {
     if (profile && !initialised.current) {
       initialised.current = true;
       const cur = profile.currency || "USD";
-      setForm({
+      const dbForm = {
         companyName: profile.companyName || "",
         industry: profile.industry || "",
         description: profile.description || "",
@@ -53,8 +65,10 @@ export default function BusinessProfile() {
         location: profile.location || "",
         sourceUrl: profile.sourceUrl || "",
         currency: cur,
-      });
+      };
+      setForm(dbForm);
       setCurrency(cur);
+      try { localStorage.setItem(FORM_CACHE_KEY, JSON.stringify(dbForm)); } catch {}
     }
   }, [profile]);
 
