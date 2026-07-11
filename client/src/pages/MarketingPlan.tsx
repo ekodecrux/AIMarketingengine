@@ -69,7 +69,12 @@ function SectionCard({ title, icon, children, accent = "primary" }: { title: str
 }
 
 function ChannelCard({ ch, symbol }: { ch: any; symbol: string }) {
-  const pct = Number(ch.budget_percent || ch.budgetPercent || 0);
+  // AI sometimes returns "70%" or "₹3500" — strip non-numeric chars before parsing
+  const rawPct = String(ch.budget_percent ?? ch.budgetPercent ?? "0");
+  const pct = Number(rawPct.replace(/[^0-9.]/g, "")) || 0;
+  const rawMonthly = String(ch.monthly_budget ?? ch.monthlyBudget ?? "");
+  // Strip currency symbols/letters, keep digits and commas/dots
+  const cleanMonthly = rawMonthly.replace(/[^0-9,.]/g, "") || "—";
   return (
     <div className="bg-muted/50 rounded-xl p-4 space-y-3 border border-border/50 hover:border-primary/30 transition-colors">
       <div className="flex items-center justify-between">
@@ -86,7 +91,7 @@ function ChannelCard({ ch, symbol }: { ch: any; symbol: string }) {
       </div>
       <Progress value={pct} className="h-1.5" />
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{symbol}{ch.monthly_budget || ch.monthlyBudget || "—"}/mo</span>
+        <span>{symbol}{cleanMonthly}/mo</span>
         <span className="text-emerald-400">{ch.expectedROI || ch.expected_roi || "—"} ROI</span>
       </div>
       {ch.tactics && (
@@ -114,8 +119,10 @@ function SmartPlanFallback({ raw, symbol }: { raw: string | null | undefined; sy
 
   // Extract channels array items
   const channelMatches = Array.from(raw.matchAll(/"channel"\s*:\s*"([^"]+)"/g));
-  const budgetMatches = Array.from(raw.matchAll(/"budget_percent"\s*:\s*(\d+)/g));
-  const monthlyMatches = Array.from(raw.matchAll(/"monthly_budget"\s*:\s*"?([\d,]+)"?/g));
+  // budget_percent can be "70%" or 70 — capture digits only
+  const budgetMatches = Array.from(raw.matchAll(/"budget_percent"\s*:\s*"?([0-9]+)/g));
+  // monthly_budget can be "₹3500" or "3,500" — capture digits/commas after optional non-digit prefix
+  const monthlyMatches = Array.from(raw.matchAll(/"monthly_budget"\s*:\s*"[^0-9]*([0-9][0-9,.]*)"?/g));
 
   // Extract quick wins
   const quickWinsMatch = raw.match(/"quickWins"\s*:\s*\[([^\]]+)\]/);
@@ -141,8 +148,8 @@ function SmartPlanFallback({ raw, symbol }: { raw: string | null | undefined; sy
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {channelMatches.map((m, i) => {
-              const pct = Number(budgetMatches[i]?.[1] || 0);
-              const monthly = monthlyMatches[i]?.[1] || "—";
+              const pct = Number((budgetMatches[i]?.[1] || "0").replace(/[^0-9.]/g, "")) || 0;
+              const monthly = (monthlyMatches[i]?.[1] || "—").replace(/[^0-9,.]/g, "") || "—";
               return (
                 <div key={i} className="bg-muted/50 rounded-xl p-4 border border-border/50">
                   <div className="flex items-center justify-between mb-2">
