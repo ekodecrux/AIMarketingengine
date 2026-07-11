@@ -21,6 +21,7 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  passwordHash: varchar("passwordHash", { length: 255 }),
 });
 
 export type User = typeof users.$inferSelect;
@@ -65,6 +66,7 @@ export const businessProfiles = mysqlTable("businessProfiles", {
     sourceUrl: varchar("sourceUrl", { length: 500 }),
   rawExtraction: text("rawExtraction"),
   currency: varchar("currency", { length: 10 }).default("USD").notNull(),
+  logoUrl: varchar("logoUrl", { length: 1000 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -342,3 +344,15 @@ export const projectApiKeys = mysqlTable("projectApiKeys", {
 });
 export type ProjectApiKey = typeof projectApiKeys.$inferSelect;
 export type InsertProjectApiKey = typeof projectApiKeys.$inferInsert;
+
+/** Global platform settings (admin-only, not project-scoped) */
+export const globalSettings = mysqlTable("globalSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  settingKey: varchar("settingKey", { length: 128 }).notNull(),
+  settingValue: text("settingValue"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type GlobalSetting = typeof globalSettings.$inferSelect;
+export type InsertGlobalSetting = typeof globalSettings.$inferInsert;

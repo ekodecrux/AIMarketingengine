@@ -33,6 +33,11 @@ export default function Leads() {
   useEffect(() => { if (projectId) setActiveProjectId(projectId); }, [projectId]);
 
   const [showAddLead, setShowAddLead] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStage, setFilterStage] = useState<string>("all");
+  const [filterMinValue, setFilterMinValue] = useState("");
+  const [filterMaxValue, setFilterMaxValue] = useState("");
+  const [filterSource, setFilterSource] = useState("all");
   const [showScraper, setShowScraper] = useState(false);
   const [showPortal, setShowPortal] = useState(false);
   const [selectedLead, setSelectedLead] = useState<any>(null);
@@ -89,8 +94,18 @@ export default function Leads() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const filteredLeads = (leads || []).filter((l: any) => {
+    const q = searchQuery.toLowerCase();
+    const matchSearch = !q || (l.name || "").toLowerCase().includes(q) || (l.company || "").toLowerCase().includes(q) || (l.email || "").toLowerCase().includes(q);
+    const matchStage = filterStage === "all" || l.stage === filterStage;
+    const matchMin = !filterMinValue || Number(l.estimatedValue || 0) >= Number(filterMinValue);
+    const matchMax = !filterMaxValue || Number(l.estimatedValue || 0) <= Number(filterMaxValue);
+    const matchSource = filterSource === "all" || (l.source || "").toLowerCase() === filterSource.toLowerCase();
+    return matchSearch && matchStage && matchMin && matchMax && matchSource;
+  });
+  const uniqueSources = Array.from(new Set((leads || []).map((l: any) => l.source).filter(Boolean))) as string[];
   const leadsByStage = STAGES.reduce((acc, stage) => {
-    acc[stage] = leads?.filter(l => l.stage === stage) || [];
+    acc[stage] = filteredLeads.filter((l: any) => l.stage === stage);
     return acc;
   }, {} as Record<LeadStage, any[]>);
 
@@ -135,6 +150,41 @@ export default function Leads() {
             ))}
           </div>
 
+          {/* Search & Filter Bar */}
+          <div className="flex flex-wrap gap-3 items-center p-4 bg-card/50 border border-border/50 rounded-xl">
+            <div className="relative flex-1 min-w-[200px]">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <Input placeholder="Search by name, company, email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 h-9 text-sm" />
+            </div>
+            <Select value={filterStage} onValueChange={setFilterStage}>
+              <SelectTrigger className="w-40 h-9 text-sm"><SelectValue placeholder="All Stages" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Stages</SelectItem>
+                {STAGES.map(s => <SelectItem key={s} value={s}>{STAGE_CONFIG[s].label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {uniqueSources.length > 0 && (
+              <Select value={filterSource} onValueChange={setFilterSource}>
+                <SelectTrigger className="w-36 h-9 text-sm"><SelectValue placeholder="All Sources" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sources</SelectItem>
+                  {uniqueSources.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex items-center gap-1.5">
+              <Input placeholder={`Min ${currencySymbol}`} value={filterMinValue} onChange={e => setFilterMinValue(e.target.value)} className="w-24 h-9 text-sm" type="number" />
+              <span className="text-muted-foreground text-xs">–</span>
+              <Input placeholder={`Max ${currencySymbol}`} value={filterMaxValue} onChange={e => setFilterMaxValue(e.target.value)} className="w-24 h-9 text-sm" type="number" />
+            </div>
+            {(searchQuery || filterStage !== "all" || filterSource !== "all" || filterMinValue || filterMaxValue) && (
+              <Button variant="ghost" size="sm" className="h-9 text-xs text-muted-foreground" onClick={() => { setSearchQuery(""); setFilterStage("all"); setFilterSource("all"); setFilterMinValue(""); setFilterMaxValue(""); }}>
+                Clear
+              </Button>
+            )}
+            <span className="text-xs text-muted-foreground ml-auto">{filteredLeads.length}/{leads?.length || 0} leads</span>
+          </div>
+
           {/* Kanban Pipeline */}
           {isLoading ? (
             <div className="flex gap-4 overflow-x-auto pb-4">
@@ -156,7 +206,7 @@ export default function Leads() {
                         <span className="text-xs text-muted-foreground">{stageLeads.length}</span>
                       </div>
                       {stageValue > 0 && (
-                        <p className="text-xs text-muted-foreground mb-2">${stageValue.toLocaleString()} value</p>
+                        <p className="text-xs text-muted-foreground mb-2">{currencySymbol}{stageValue.toLocaleString()} value</p>
                       )}
                       <div className="space-y-2">
                         {stageLeads.map(lead => (
@@ -165,7 +215,7 @@ export default function Leads() {
                             <p className="text-sm font-medium text-foreground truncate">{lead.name}</p>
                             {lead.company && <p className="text-xs text-muted-foreground truncate mt-0.5">{lead.company}</p>}
                             {lead.estimatedValue && (
-                              <p className="text-xs font-semibold text-emerald-400 mt-1.5">${Number(lead.estimatedValue).toLocaleString()}</p>
+                              <p className="text-xs font-semibold text-emerald-400 mt-1.5">{currencySymbol}{Number(lead.estimatedValue).toLocaleString()}</p>
                             )}
                             <div className="flex items-center justify-between mt-2">
                               <span className="text-xs text-muted-foreground">{lead.source}</span>
@@ -237,7 +287,7 @@ export default function Leads() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {selectedLead.email && <div><span className="text-muted-foreground">Email: </span><span className="text-foreground">{selectedLead.email}</span></div>}
                 {selectedLead.phone && <div><span className="text-muted-foreground">Phone: </span><span className="text-foreground">{selectedLead.phone}</span></div>}
-                {selectedLead.estimatedValue && <div><span className="text-muted-foreground">Value: </span><span className="text-emerald-400 font-semibold">${Number(selectedLead.estimatedValue).toLocaleString()}</span></div>}
+                {selectedLead.estimatedValue && <div><span className="text-muted-foreground">Value: </span><span className="text-emerald-400 font-semibold">{currencySymbol}{Number(selectedLead.estimatedValue).toLocaleString()}</span></div>}
                 <div><span className="text-muted-foreground">Source: </span><span className="text-foreground">{selectedLead.source}</span></div>
               </div>
               {selectedLead.notes && (
@@ -317,7 +367,7 @@ export default function Leads() {
                           <span className="text-xs text-muted-foreground">— {lead.jobTitle}</span>
                         </div>
                         <p className="text-xs text-muted-foreground">{lead.company} · {lead.location}</p>
-                        {lead.estimatedValue && <p className="text-xs text-emerald-400 mt-1">Est. value: ${Number(lead.estimatedValue).toLocaleString()}</p>}
+                        {lead.estimatedValue && <p className="text-xs text-emerald-400 mt-1">Est. value: {currencySymbol}{Number(lead.estimatedValue).toLocaleString()}</p>}
                         {lead.whyGoodFit && <p className="text-xs text-muted-foreground mt-1 italic">{lead.whyGoodFit}</p>}
                       </div>
                     </div>

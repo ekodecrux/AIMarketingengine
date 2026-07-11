@@ -49,7 +49,7 @@ interface NavItem {
 const globalNav: NavItem[] = [
   { label: "Dashboard", icon: <LayoutDashboard size={16} />, href: "/dashboard" },
   { label: "Knowledge Base", icon: <BookOpen size={16} />, href: "/knowledge" },
-  { label: "Integrations", icon: <Settings size={16} />, href: "/integrations" },
+  { label: "Platform Settings", icon: <Settings size={16} />, href: "/settings" },
 ];
 
 const projectNav: NavItem[] = [
@@ -62,6 +62,7 @@ const projectNav: NavItem[] = [
   { label: "Campaigns", icon: <TrendingUp size={16} />, href: "/campaigns", projectScoped: true },
   { label: "SEO & Backlinks", icon: <Link2 size={16} />, href: "/seo", projectScoped: true },
   { label: "WhatsApp", icon: <MessageCircle size={16} />, href: "/whatsapp", projectScoped: true },
+  { label: "Integrations", icon: <Settings size={16} />, href: "/integrations", projectScoped: true },
   { label: "API Settings", icon: <Settings size={16} />, href: "/settings", projectScoped: true },
 ];
 
@@ -104,7 +105,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <div className="flex h-screen bg-background items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">Please sign in to continue</p>
-          <Button onClick={() => startLogin()}>Sign In</Button>
+          <div className="flex gap-3 justify-center">
+            <Button asChild variant="default">
+              <Link href="/login">Demo Login</Link>
+            </Button>
+            <Button variant="outline" onClick={() => startLogin()}>Manus OAuth</Button>
+          </div>
         </div>
       </div>
     );

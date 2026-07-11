@@ -1,5 +1,6 @@
 import { AppLayout } from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
+import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +21,14 @@ const PLATFORMS = [
 ];
 
 export default function Integrations() {
+  const { activeProjectId } = useProject();
   const [connecting, setConnecting] = useState<string | null>(null);
   const [form, setForm] = useState({ accountName: "", accessToken: "", apiKey: "", apiSecret: "" });
 
-  const { data: accounts, refetch } = trpc.socialAccounts.list.useQuery({});
+  const { data: accounts, refetch } = trpc.socialAccounts.list.useQuery(
+    { projectId: activeProjectId! },
+    { enabled: !!activeProjectId }
+  );
 
   const connect = trpc.socialAccounts.connect.useMutation({
     onSuccess: () => { refetch(); setConnecting(null); setForm({ accountName: "", accessToken: "", apiKey: "", apiSecret: "" }); toast.success("Account connected!"); },

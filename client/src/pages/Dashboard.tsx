@@ -84,7 +84,12 @@ export default function Dashboard() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">Please sign in to continue</p>
-          <Button onClick={() => startLogin()}>Sign In</Button>
+          <div className="flex gap-3 justify-center">
+            <Button asChild>
+              <Link href="/login">Demo Login</Link>
+            </Button>
+            <Button variant="outline" onClick={() => startLogin()}>Manus OAuth</Button>
+          </div>
         </div>
       </div>
     );

@@ -8,7 +8,7 @@ import {
   Users, Zap, CheckCircle2, Star
 } from "lucide-react";
 import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 
 const features = [
   { icon: <Sparkles size={20} />, title: "AI Marketing Plans", desc: "Goal-based strategies with SEO-first approach and smart budget allocation across all channels." },
@@ -50,9 +50,14 @@ export default function Home() {
             </div>
             <span className="font-display font-bold text-lg">Nexus AI</span>
           </div>
-          <Button onClick={() => startLogin()} className="btn-glow gap-2">
-            Get Started <ArrowRight size={16} />
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/login">Demo Login</Link>
+            </Button>
+            <Button onClick={() => startLogin()} className="btn-glow gap-2" size="sm">
+              Get Started <ArrowRight size={16} />
+            </Button>
+          </div>
         </div>
       </nav>
 
@@ -75,9 +80,11 @@ export default function Home() {
             <Button size="lg" onClick={() => startLogin()} className="btn-glow gap-2 px-8 text-base h-12">
               Start Free <ArrowRight size={18} />
             </Button>
-            <Button size="lg" variant="outline" className="gap-2 px-8 text-base h-12">
-              <BarChart3 size={18} />
-              See Demo
+            <Button size="lg" variant="outline" asChild className="gap-2 px-8 text-base h-12">
+              <Link href="/login">
+                <Zap size={18} />
+                Try Demo
+              </Link>
             </Button>
           </div>
           {/* Social proof */}

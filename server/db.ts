@@ -92,6 +92,17 @@ export async function getUserByOpenId(openId: string) {
   return result[0];
 }
 
+export async function getUserByEmailAndPassword(email: string, passwordHash: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.email, email), eq(users.passwordHash, passwordHash)))
+    .limit(1);
+  return result[0];
+}
+
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
 export async function getProjectsByUser(userId: number): Promise<Project[]> {

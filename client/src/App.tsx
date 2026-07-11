@@ -22,6 +22,8 @@ import KnowledgeBase from "./pages/KnowledgeBase";
 import Onboarding from "./pages/Onboarding";
 import ClientPortal from "./pages/ClientPortal";
 import Settings from "./pages/Settings";
+import Login from "./pages/Login";
+import GlobalSettings from "./pages/GlobalSettings";
 
 function Router() {
   return (
@@ -39,10 +41,12 @@ function Router() {
       <Route path="/projects/:id/campaigns" component={Campaigns} />
       <Route path="/projects/:id/seo" component={SeoTools} />
       <Route path="/projects/:id/whatsapp" component={WhatsApp} />
-      <Route path="/integrations" component={Integrations} />
+      <Route path="/projects/:id/integrations" component={Integrations} />
       <Route path="/knowledge" component={KnowledgeBase} />
       <Route path="/portal/:token" component={ClientPortal} />
       <Route path="/projects/:id/settings" component={Settings} />
+      <Route path="/login" component={Login} />
+      <Route path="/settings" component={GlobalSettings} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

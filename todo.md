@@ -113,6 +113,19 @@
 - [x] Fix Business Profile form resetting when navigating to other menu and coming back
 
 ## New Features (Round 2)
-- [ ] API Keys settings page: Google Analytics, SendGrid/email campaign keys stored securely in Integrations
-- [ ] Export Marketing Plan as PDF (beautifully formatted, downloadable)
-- [ ] Customer-facing CRM pipeline (client portal: full kanban board, lead stage updates, notes, conversion tracking)
+- [x] API Keys settings page: Google Analytics, SendGrid/email campaign keys stored securely in Integrations
+- [x] Export Marketing Plan as PDF (beautifully formatted, downloadable)
+- [x] Customer-facing CRM pipeline (client portal: full kanban board, lead stage updates, notes, conversion tracking)
+- [ ] CRM kanban: add search bar + filter by lead value, stage, source
+- [ ] Marketing Plan PDF: company logo upload in Business Profile, embedded in PDF header
+
+## New Features (Round 3)
+- [x] Demo login page (/login) with email/password form and Admin Demo / Client Demo quick-fill buttons
+- [x] Local auth backend: auth.localLogin mutation with SHA-256 password hashing + JWT session cookie
+- [x] Demo users in DB: admin@nexusai.demo / admin123 (admin), client@nexusai.demo / client123 (user)
+- [x] Move Integrations from global /integrations to project-scoped /projects/:id/integrations
+- [x] Global Settings page (/settings) for platform-level config: AI model, notifications, platform defaults, admin panel
+- [x] Update AppLayout unauthenticated fallback to show Demo Login button
+- [x] Update Home page with Demo Login button in nav and hero CTA
+- [x] Update Dashboard unauthenticated fallback to show Demo Login button
+- [x] globalSettings table created in DB for platform-level config

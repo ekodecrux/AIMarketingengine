@@ -1,8 +1,15 @@
-import { COOKIE_NAME } from "@shared/const";
+import crypto from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
+import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const";
+
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(password + "nexusai_salt_2026").digest("hex");
+}
 import {
   createBacklink,
   createCampaign,
@@ -59,6 +66,7 @@ import {
   getProjectApiKeys,
   upsertProjectApiKey,
   deleteProjectApiKey,
+  getUserByEmailAndPassword,
 } from "./db";
 import { z } from "zod";
 
@@ -138,6 +146,26 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    localLogin: publicProcedure
+      .input(z.object({
+        email: z.string().email(),
+        password: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const passwordHash = hashPassword(input.password);
+        const user = await getUserByEmailAndPassword(input.email, passwordHash);
+        if (!user) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+        }
+        // Create session token using the same mechanism as OAuth
+        const sessionToken = await sdk.createSessionToken(user.openId, {
+          name: user.name || "",
+          expiresInMs: ONE_YEAR_MS,
+        });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
+      }),
   }),
 
   // ─── Projects ──────────────────────────────────────────────────────────────
@@ -264,6 +292,7 @@ Return a JSON object with these fields:
         extractionSource: z.enum(["website", "manual", "hybrid"]).optional(),
         sourceUrl: z.string().optional(),
         currency: z.string().optional(),
+        logoUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         await upsertBusinessProfile(input);
