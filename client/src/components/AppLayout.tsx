@@ -62,6 +62,7 @@ const projectNav: NavItem[] = [
   { label: "Campaigns", icon: <TrendingUp size={16} />, href: "/campaigns", projectScoped: true },
   { label: "SEO & Backlinks", icon: <Link2 size={16} />, href: "/seo", projectScoped: true },
   { label: "WhatsApp", icon: <MessageCircle size={16} />, href: "/whatsapp", projectScoped: true },
+  { label: "API Settings", icon: <Settings size={16} />, href: "/settings", projectScoped: true },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {

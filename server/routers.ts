@@ -55,6 +55,10 @@ import {
   updateLeadScrapeJob,
   getLeadScrapeJobs,
   getLeadScrapeJob,
+  getDb,
+  getProjectApiKeys,
+  upsertProjectApiKey,
+  deleteProjectApiKey,
 } from "./db";
 import { z } from "zod";
 
@@ -282,20 +286,25 @@ Return a JSON object with these fields:
         industry: z.string().optional(),
         targetAudience: z.string().optional(),
         currentChannels: z.string().optional(),
+        currency: z.string().optional(),
+        currencySymbol: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const topicKey = `marketing_plan_${input.objective}_${input.budget}_${input.timeframe}`;
+        const currency = input.currency || "USD";
+        const currencySymbol = input.currencySymbol || "$";
+        const topicKey = `marketing_plan_${input.objective}_${input.budget}_${input.timeframe}_${currency}`;
         const content = await aiWithKnowledge(
           ctx.user.id, input.projectId, "plan", topicKey,
           `Generate marketing plan for ${input.objective}`,
           MARKETING_SYSTEM_PROMPT,
           `Create a comprehensive, actionable marketing plan with these details:
 - Business Objective: ${input.objective}
-- Monthly Budget: $${input.budget}
+- Monthly Budget: ${currencySymbol}${input.budget} (Currency: ${currency})
 - Timeframe: ${input.timeframe}
 - Industry: ${input.industry || "General"}
 - Target Audience: ${input.targetAudience || "To be defined"}
 - Current Channels: ${input.currentChannels || "None"}
+- IMPORTANT: All monetary values in the response MUST use the ${currency} currency symbol "${currencySymbol}" — never use $ unless currency is USD.
 
 Apply the RACE framework and 70/20/10 budget rule. SEO must be the primary channel.
 
@@ -341,6 +350,76 @@ Return a detailed JSON marketing plan with:
       .mutation(async ({ input }) => {
         await updateMarketingPlan(input.id, { status: "active" });
         return { success: true };
+      }),
+
+    exportPdf: protectedProcedure
+      .input(z.object({ id: z.number(), currencySymbol: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const plans = await getMarketingPlans(0); // will fetch by id below
+        const db = await getDb();
+        if (!db) throw new Error("DB unavailable");
+        const { marketingPlans: mp } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const rows = await db.select().from(mp).where(eq(mp.id, input.id)).limit(1);
+        const plan = rows[0];
+        if (!plan) throw new Error("Plan not found");
+        const sym = input.currencySymbol || "$";
+        let parsed: any = {};
+        try {
+          let raw = (plan.planJson || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+          parsed = JSON.parse(raw);
+        } catch {}
+        // Build HTML for PDF
+        const channels = (parsed.channels || []).map((ch: any) =>
+          `<tr><td>${ch.channel || ""}</td><td>${ch.budget_percent || 0}%</td><td>${sym}${ch.monthly_budget || 0}/mo</td><td>${ch.expectedROI || ""}</td></tr>`
+        ).join("");
+        const goals = (parsed.goals || []).map((g: any) =>
+          `<li><strong>${g.objective || ""}</strong>${(g.keyResults || []).map((kr: any) => `<br/>&nbsp;&nbsp;• ${kr.kr || kr.metric || ""}: ${kr.target || ""}`).join("")}</li>`
+        ).join("");
+        const kpis = (parsed.kpis || []).map((k: any) =>
+          `<tr><td>${k.metric || ""}</td><td>${k.target || ""}</td><td>${k.plainEnglishExplanation || k.measurement || ""}</td></tr>`
+        ).join("");
+        const milestones = (parsed.milestones || []).map((m: any) =>
+          `<tr><td>${m.week || ""}</td><td>${m.action || ""}</td><td>${m.expectedOutcome || ""}</td></tr>`
+        ).join("");
+        const quickWins = (parsed.quickWins || []).map((w: string) => `<li>${w}</li>`).join("");
+        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><style>
+          body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;margin:0;padding:0;background:#fff;}
+          .cover{background:linear-gradient(135deg,#0f0f23 0%,#1a1a3e 50%,#0d1b2a 100%);color:#fff;padding:60px 48px;min-height:200px;}
+          .cover h1{font-size:32px;font-weight:700;margin:0 0 8px;letter-spacing:-0.5px;}
+          .cover p{font-size:14px;opacity:0.7;margin:0 0 4px;}
+          .cover .badge{display:inline-block;background:rgba(139,92,246,0.3);border:1px solid rgba(139,92,246,0.5);color:#c4b5fd;padding:4px 12px;border-radius:20px;font-size:12px;margin-top:16px;}
+          .body{padding:40px 48px;}
+          h2{font-size:18px;font-weight:700;color:#0f0f23;border-left:4px solid #8b5cf6;padding-left:12px;margin:32px 0 16px;}
+          h3{font-size:14px;font-weight:600;color:#4c1d95;margin:20px 0 8px;}
+          p{font-size:13px;line-height:1.7;color:#374151;}
+          table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px;}
+          th{background:#f3f0ff;color:#4c1d95;font-weight:600;padding:8px 12px;text-align:left;border:1px solid #e5e7eb;}
+          td{padding:7px 12px;border:1px solid #e5e7eb;color:#374151;}
+          tr:nth-child(even) td{background:#fafafa;}
+          ul,ol{font-size:13px;color:#374151;line-height:1.8;padding-left:20px;}
+          .summary{background:#f3f0ff;border-left:4px solid #8b5cf6;padding:16px 20px;border-radius:0 8px 8px 0;margin:16px 0;}
+          .footer{text-align:center;font-size:11px;color:#9ca3af;padding:24px;border-top:1px solid #e5e7eb;margin-top:40px;}
+          .chip{display:inline-block;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;margin-left:6px;}
+        </style></head><body>
+        <div class="cover">
+          <div style="font-size:11px;opacity:0.5;margin-bottom:8px;">NEXUS AI — MARKETING INTELLIGENCE PLATFORM</div>
+          <h1>${plan.title || "AI Marketing Plan"}</h1>
+          <p>Objective: ${plan.objective || ""}</p>
+          <p>Budget: ${sym}${plan.totalBudget || ""} &nbsp;|&nbsp; Timeframe: ${plan.timeframe || ""}</p>
+          <div class="badge">SEO-First Strategy &bull; RACE Framework &bull; 70/20/10 Budget Rule</div>
+        </div>
+        <div class="body">
+          ${parsed.executiveSummary ? `<h2>Executive Summary</h2><div class="summary"><p>${parsed.executiveSummary}</p></div>` : ""}
+          ${channels ? `<h2>Channel Budget Allocation</h2><table><tr><th>Channel</th><th>Budget %</th><th>Monthly</th><th>Expected ROI</th></tr>${channels}</table>` : ""}
+          ${goals ? `<h2>SMART Goals &amp; OKRs</h2><ul>${goals}</ul>` : ""}
+          ${kpis ? `<h2>Key Performance Indicators</h2><table><tr><th>Metric</th><th>Target</th><th>What It Means</th></tr>${kpis}</table>` : ""}
+          ${milestones ? `<h2>Milestones &amp; Timeline</h2><table><tr><th>Week</th><th>Action</th><th>Expected Outcome</th></tr>${milestones}</table>` : ""}
+          ${quickWins ? `<h2>Quick Wins (First 30 Days)</h2><ul>${quickWins}</ul>` : ""}
+          ${parsed.warningSignals?.length ? `<h2>Warning Signals to Watch</h2><ul>${parsed.warningSignals.map((w: string) => `<li>${w}</li>`).join("")}</ul>` : ""}
+          <div class="footer">Generated by Nexus AI &bull; ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} &bull; Confidential</div>
+        </div></body></html>`;
+        return { html, title: plan.title || "Marketing Plan" };
       }),
   }),
 
@@ -672,6 +751,8 @@ Return JSON: {title, body, hashtags, ssiTips, bestPostingTime, engagementPredict
         businessDescription: z.string(),
         targetAudience: z.string().optional(),
         budget: z.string().optional(),
+        currency: z.string().optional(),
+        currencySymbol: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const topicKey = `lead_strategy_${input.businessDescription}`;
@@ -682,7 +763,7 @@ Return JSON: {title, body, hashtags, ssiTips, bestPostingTime, engagementPredict
           `Create a guaranteed lead generation strategy for:
 Business: ${input.businessDescription}
 Target Audience: ${input.targetAudience || "To be defined"}
-Monthly Budget: $${input.budget || "1000"}
+Monthly Budget: ${input.currencySymbol || "$"}${input.budget || "1000"} (Currency: ${input.currency || "USD"})
 
 Include:
 1. SEO-first approach: content clusters, local SEO, featured snippets
@@ -1201,6 +1282,31 @@ Make the data realistic for the target market. Include a mix of warm and cold le
         };
       }),
   }),
-});
 
+  // ─── API Keys ────────────────────────────────────────────────────────────────
+  apiKeys: router({
+    list: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(({ ctx, input }) => getProjectApiKeys(input.projectId, ctx.user.id)),
+
+    save: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        service: z.string(),
+        keyName: z.string(),
+        keyValue: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await upsertProjectApiKey({ ...input, userId: ctx.user.id });
+        return { id };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteProjectApiKey(input.id);
+        return { success: true };
+      }),
+  }),
+});
 export type AppRouter = typeof appRouter;

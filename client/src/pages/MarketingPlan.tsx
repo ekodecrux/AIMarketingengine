@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import {
   Sparkles, Zap, Target, DollarSign, TrendingUp, Calendar,
   CheckCircle2, AlertTriangle, Lightbulb, BarChart3, Search,
-  MessageSquare, Globe, Users, ArrowRight, Clock
+  MessageSquare, Globe, Users, ArrowRight, Clock, Download, Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -176,11 +176,24 @@ function SmartPlanFallback({ raw, symbol }: { raw: string | null | undefined; sy
 export default function MarketingPlan() {
   const params = useParams<{ id: string }>();
   const projectId = Number(params.id);
-  const { setActiveProjectId, currencySymbol } = useProject();
+  const { setActiveProjectId, currencySymbol, currency } = useProject();
   useEffect(() => { if (projectId) setActiveProjectId(projectId); }, [projectId]);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ objective: "Generate more leads", budget: "2000", timeframe: "6 months", targetAudience: "", currentChannels: "" });
+
+  const exportPdf = trpc.marketingPlans.exportPdf.useMutation({
+    onSuccess: (data) => {
+      // Open HTML in a new window and trigger print/save as PDF
+      const win = window.open("", "_blank");
+      if (win) {
+        win.document.write(data.html);
+        win.document.close();
+        setTimeout(() => win.print(), 800);
+      }
+    },
+    onError: () => toast.error("Failed to generate PDF"),
+  });
 
   const { data: plans, isLoading, refetch } = trpc.marketingPlans.list.useQuery({ projectId }, { enabled: !!projectId });
   const { data: project } = trpc.projects.get.useQuery({ id: projectId }, { enabled: !!projectId });
@@ -212,9 +225,17 @@ export default function MarketingPlan() {
               <h1 className="font-display font-bold text-2xl text-foreground">AI Marketing Plan</h1>
               <p className="text-muted-foreground text-sm mt-1">SEO-first strategy with full channel breakdown and budget allocation</p>
             </div>
-            <Button onClick={() => setShowForm(true)} className="btn-glow gap-2">
-              <Sparkles size={16} />{latestPlan ? "Regenerate Plan" : "Generate Plan"}
-            </Button>
+            <div className="flex items-center gap-2">
+              {latestPlan && (
+                <Button variant="outline" className="gap-2" onClick={() => exportPdf.mutate({ id: latestPlan.id, currencySymbol })} disabled={exportPdf.isPending}>
+                  {exportPdf.isPending ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                  Export PDF
+                </Button>
+              )}
+              <Button onClick={() => setShowForm(true)} className="btn-glow gap-2">
+                <Sparkles size={16} />{latestPlan ? "Regenerate Plan" : "Generate Plan"}
+              </Button>
+            </div>
           </div>
 
           {/* Empty state */}
@@ -472,7 +493,7 @@ export default function MarketingPlan() {
                 <span className="text-primary font-medium">Using business profile:</span> {biz.companyName} · {biz.industry}
               </div>
             )}
-            <Button className="w-full btn-glow gap-2" onClick={() => generatePlan.mutate({ projectId, ...form, industry: project?.industry || biz?.industry || undefined })} disabled={generatePlan.isPending}>
+            <Button className="w-full btn-glow gap-2" onClick={() => generatePlan.mutate({ projectId, ...form, industry: project?.industry || biz?.industry || undefined, currency, currencySymbol })} disabled={generatePlan.isPending}>
               {generatePlan.isPending ? <><Zap size={16} className="animate-spin" />Generating Plan...</> : <><Sparkles size={16} />Generate Plan</>}
             </Button>
           </div>

@@ -327,3 +327,18 @@ export const leadScrapeJobs = mysqlTable("leadScrapeJobs", {
 });
 
 export type LeadScrapeJob = typeof leadScrapeJobs.$inferSelect;
+
+/** Per-project integration API keys (Google Analytics, SendGrid, etc.) */
+export const projectApiKeys = mysqlTable("projectApiKeys", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull(),
+  userId: int("userId").notNull(),
+  service: varchar("service", { length: 64 }).notNull(), // e.g. "google_analytics", "sendgrid", "mailchimp"
+  keyName: varchar("keyName", { length: 128 }).notNull(), // human label e.g. "Measurement ID"
+  keyValue: text("keyValue").notNull(), // stored value (treat as sensitive)
+  isActive: int("isActive").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ProjectApiKey = typeof projectApiKeys.$inferSelect;
+export type InsertProjectApiKey = typeof projectApiKeys.$inferInsert;

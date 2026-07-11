@@ -111,3 +111,8 @@
 - [x] Fix currency not reflecting in Marketing Plan and all other pages after change in Business Profile
 - [x] Fix currency not reflecting in Marketing Plan and all other pages after change in Business Profile
 - [x] Fix Business Profile form resetting when navigating to other menu and coming back
+
+## New Features (Round 2)
+- [ ] API Keys settings page: Google Analytics, SendGrid/email campaign keys stored securely in Integrations
+- [ ] Export Marketing Plan as PDF (beautifully formatted, downloadable)
+- [ ] Customer-facing CRM pipeline (client portal: full kanban board, lead stage updates, notes, conversion tracking)

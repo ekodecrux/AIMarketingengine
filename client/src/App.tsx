@@ -21,6 +21,7 @@ import Integrations from "./pages/Integrations";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import Onboarding from "./pages/Onboarding";
 import ClientPortal from "./pages/ClientPortal";
+import Settings from "./pages/Settings";
 
 function Router() {
   return (
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/integrations" component={Integrations} />
       <Route path="/knowledge" component={KnowledgeBase} />
       <Route path="/portal/:token" component={ClientPortal} />
+      <Route path="/projects/:id/settings" component={Settings} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

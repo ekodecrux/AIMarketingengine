@@ -33,6 +33,9 @@ import {
   seoAudits,
   socialAccounts,
   users,
+  projectApiKeys,
+  ProjectApiKey,
+  InsertProjectApiKey,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -523,4 +526,32 @@ export async function getLeadScrapeJob(id: number): Promise<LeadScrapeJob | unde
   if (!db) return undefined;
   const result = await db.select().from(leadScrapeJobs).where(eq(leadScrapeJobs.id, id)).limit(1);
   return result[0];
+}
+
+// ─── Project API Keys ──────────────────────────────────────────────────────────
+export async function getProjectApiKeys(projectId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(projectApiKeys).where(and(eq(projectApiKeys.projectId, projectId), eq(projectApiKeys.userId, userId)));
+}
+
+export async function upsertProjectApiKey(data: { projectId: number; userId: number; service: string; keyName: string; keyValue: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const existing = await db.select().from(projectApiKeys)
+    .where(and(eq(projectApiKeys.projectId, data.projectId), eq(projectApiKeys.userId, data.userId), eq(projectApiKeys.service, data.service), eq(projectApiKeys.keyName, data.keyName)))
+    .limit(1);
+  if (existing.length > 0) {
+    await db.update(projectApiKeys).set({ keyValue: data.keyValue, isActive: 1 })
+      .where(eq(projectApiKeys.id, existing[0].id));
+    return existing[0].id;
+  }
+  const [result] = await db.insert(projectApiKeys).values({ ...data, isActive: 1 });
+  return (result as any).insertId as number;
+}
+
+export async function deleteProjectApiKey(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.delete(projectApiKeys).where(eq(projectApiKeys.id, id));
 }

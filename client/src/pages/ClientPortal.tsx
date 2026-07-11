@@ -7,7 +7,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { useParams } from "wouter";
 import { useState } from "react";
-import { Users, CheckCircle2, Clock, XCircle, DollarSign, MessageSquare, Zap, TrendingUp } from "lucide-react";
+import {
+  Users, CheckCircle2, Clock, XCircle, DollarSign, MessageSquare,
+  TrendingUp, Building2, Phone, Mail, ArrowRight, Activity,
+  Target, BarChart3, Sparkles, Calendar, User
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STAGE_COLORS: Record<string, string> = {
@@ -22,192 +26,338 @@ const STAGE_COLORS: Record<string, string> = {
 
 const STAGE_LABELS: Record<string, string> = {
   new: "New Lead", contacted: "Contacted", qualified: "Qualified",
-  proposal: "Proposal Sent", negotiation: "Negotiation", closed_won: "Closed Won", closed_lost: "Closed Lost",
+  proposal: "Proposal Sent", negotiation: "Negotiation",
+  closed_won: "Closed Won", closed_lost: "Closed Lost",
 };
 
-const STAGES = ["new", "qualified", "proposal", "closed_won", "closed_lost"];
+const KANBAN_STAGES = ["new", "qualified", "proposal", "negotiation", "closed_won"];
+
+const NEXT_STAGE: Record<string, string> = {
+  new: "qualified",
+  qualified: "proposal",
+  proposal: "negotiation",
+  negotiation: "closed_won",
+};
+
+const VALID_STAGES = ["new", "qualified", "proposal", "closed_won", "closed_lost"] as const;
+type ValidStage = typeof VALID_STAGES[number];
 
 export default function ClientPortal() {
   const params = useParams<{ token: string }>();
   const token = params.token;
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [note, setNote] = useState("");
-  const [filterStage, setFilterStage] = useState<string>("all");
+  const [view, setView] = useState<"kanban" | "list">("kanban");
 
-  const { data: portal, isLoading: portalLoading, error } = trpc.clientPortal.getByToken.useQuery({ token }, { enabled: !!token });
-  const { data: leads, isLoading: leadsLoading, refetch } = trpc.clientPortal.getLeadsForClient.useQuery({ token }, { enabled: !!token });
-  const { data: activities } = trpc.clientPortal.getLeadActivities.useQuery({ token, leadId: selectedLead?.id }, { enabled: !!token && !!selectedLead?.id });
+  const { data: portal, isLoading: portalLoading, error } = trpc.clientPortal.getByToken.useQuery(
+    { token }, { enabled: !!token }
+  );
+  const { data: leads = [], isLoading: leadsLoading, refetch } = trpc.clientPortal.getLeadsForClient.useQuery(
+    { token }, { enabled: !!token }
+  );
+  const { data: activities = [] } = trpc.clientPortal.getLeadActivities.useQuery(
+    { token, leadId: selectedLead?.id ?? 0 },
+    { enabled: !!token && !!selectedLead?.id }
+  );
 
   const updateStage = trpc.clientPortal.updateLeadAsClient.useMutation({
-    onSuccess: () => { refetch(); toast.success("Lead stage updated!"); },
-    onError: (e: any) => toast.error(e.message),
+    onSuccess: () => { toast.success("Lead stage updated"); refetch(); },
+    onError: (e: any) => toast.error(e.message || "Failed to update"),
   });
 
-  const addNote = trpc.clientPortal.updateLeadAsClient.useMutation({
-    onSuccess: () => { setNote(""); refetch(); toast.success("Note added!"); },
-    onError: (e: any) => toast.error(e.message),
+  const addNoteMutation = trpc.clientPortal.updateLeadAsClient.useMutation({
+    onSuccess: () => { toast.success("Note added"); setNote(""); refetch(); },
+    onError: (e: any) => toast.error(e.message || "Failed to add note"),
   });
 
-  if (portalLoading) return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-          <Zap size={20} className="text-primary animate-pulse" />
+  if (portalLoading) {
+    return (
+      <div className="min-h-screen bg-[#0a0a14] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center mx-auto animate-pulse">
+            <Sparkles size={22} className="text-primary" />
+          </div>
+          <p className="text-muted-foreground text-sm">Loading your portal...</p>
         </div>
-        <p className="text-muted-foreground text-sm">Loading your portal...</p>
       </div>
-    </div>
-  );
+    );
+  }
 
-  if (error || !portal) return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center space-y-3">
-        <XCircle size={40} className="text-rose-400 mx-auto" />
-        <h2 className="text-xl font-bold text-foreground">Portal Not Found</h2>
-        <p className="text-muted-foreground text-sm">This portal link is invalid or has been revoked.</p>
+  if (error || !portal) {
+    return (
+      <div className="min-h-screen bg-[#0a0a14] flex items-center justify-center">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto">
+            <XCircle size={28} className="text-red-400" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Portal Not Found</h2>
+          <p className="text-muted-foreground text-sm">This link may have expired or is invalid. Please contact your marketing team for a new link.</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
-  const permissions = typeof portal.permissions === "string" ? JSON.parse(portal.permissions) : portal.permissions || {};
-  const filteredLeads = (leads || []).filter((l: any) => filterStage === "all" || l.stage === filterStage);
-  const wonLeads = (leads || []).filter((l: any) => l.stage === "closed_won");
-  const totalRevenue = wonLeads.reduce((s: number, l: any) => s + Number(l.dealValue || 0), 0);
-  const conversionRate = leads?.length ? Math.round((wonLeads.length / leads.length) * 100) : 0;
+  const leadsArr = leads as any[];
+  const totalValue = leadsArr.reduce((s: number, l: any) => s + (Number(l.dealValue) || 0), 0);
+  const wonLeads = leadsArr.filter((l: any) => l.stage === "closed_won");
+  const wonValue = wonLeads.reduce((s: number, l: any) => s + (Number(l.dealValue) || 0), 0);
+  const convRate = leadsArr.length > 0 ? Math.round((wonLeads.length / leadsArr.length) * 100) : 0;
+  const activeLeads = leadsArr.filter((l: any) => !["closed_won", "closed_lost"].includes(l.stage)).length;
+
+  const byStage = (stage: string) => leadsArr.filter((l: any) => l.stage === stage);
+
+  const handleMoveStage = (leadId: number, stage: string) => {
+    if (!VALID_STAGES.includes(stage as ValidStage)) return;
+    updateStage.mutate({ token, leadId, stage: stage as ValidStage });
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-            <Zap size={16} className="text-primary" />
+    <div className="min-h-screen bg-[#0a0a14] text-foreground">
+      {/* Top nav */}
+      <header className="border-b border-border/40 bg-[#0d0d1a]/80 backdrop-blur-xl sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+              <Sparkles size={16} className="text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground">Nexus AI</p>
+              <p className="text-[10px] text-muted-foreground">Client Portal — {portal.clientName}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-bold text-foreground">Client Portal</p>
-            <p className="text-xs text-muted-foreground">{portal.clientName}</p>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="text-xs text-primary border-primary/30 bg-primary/10">
+              <User size={10} className="mr-1" />{portal.clientEmail || portal.clientName}
+            </Badge>
+            <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
+              <button
+                onClick={() => setView("kanban")}
+                className={cn("px-3 py-1 rounded-md text-xs font-medium transition-colors", view === "kanban" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground")}
+              >Kanban</button>
+              <button
+                onClick={() => setView("list")}
+                className={cn("px-3 py-1 rounded-md text-xs font-medium transition-colors", view === "list" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground")}
+              >List</button>
+            </div>
           </div>
         </div>
-        <Badge variant="outline" className="text-xs text-emerald-400 border-emerald-500/20">
-          <CheckCircle2 size={10} className="mr-1" />Active
-        </Badge>
-      </div>
+      </header>
 
-      <div className="p-6 space-y-6 max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        {/* Welcome */}
+        <div>
+          <h1 className="font-display font-bold text-2xl text-foreground">Your Sales Pipeline</h1>
+          <p className="text-muted-foreground text-sm mt-1">Track your leads, update stages, and monitor your revenue progress in real time.</p>
+        </div>
+
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Total Leads", value: leads?.length || 0, icon: <Users size={16} />, color: "text-primary" },
-            { label: "Closed Won", value: wonLeads.length, icon: <CheckCircle2 size={16} />, color: "text-emerald-400" },
-            { label: "Revenue", value: `$${totalRevenue.toLocaleString()}`, icon: <DollarSign size={16} />, color: "text-amber-400" },
-            { label: "Conversion", value: `${conversionRate}%`, icon: <TrendingUp size={16} />, color: "text-sky-400" },
-          ].map(m => (
-            <div key={m.label} className="card-premium p-4">
-              <div className={cn("mb-2", m.color)}>{m.icon}</div>
-              <p className="text-xl font-bold text-foreground">{m.value}</p>
-              <p className="text-xs text-muted-foreground">{m.label}</p>
+            { label: "Total Leads", value: leadsArr.length, icon: <Users size={18} />, color: "text-sky-400", bg: "bg-sky-500/10" },
+            { label: "Active Leads", value: activeLeads, icon: <Activity size={18} />, color: "text-violet-400", bg: "bg-violet-500/10" },
+            { label: "Pipeline Value", value: `₹${totalValue.toLocaleString()}`, icon: <DollarSign size={18} />, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+            { label: "Conversion Rate", value: `${convRate}%`, icon: <TrendingUp size={18} />, color: "text-amber-400", bg: "bg-amber-500/10" },
+          ].map(stat => (
+            <div key={stat.label} className="card-premium p-4">
+              <div className={`w-9 h-9 rounded-xl ${stat.bg} flex items-center justify-center mb-3 ${stat.color}`}>{stat.icon}</div>
+              <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
             </div>
           ))}
         </div>
 
-        {/* Stage filter */}
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setFilterStage("all")}
-            className={cn("px-3 py-1 rounded-full text-xs font-medium transition-all border", filterStage === "all" ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/30")}>
-            All ({leads?.length || 0})
-          </button>
-          {STAGES.map((s: string) => {
-            const count = (leads || []).filter((l: any) => l.stage === s).length || 0;
-            if (!count) return null;
-            return (
-              <button key={s} onClick={() => setFilterStage(s)}
-                className={cn("px-3 py-1 rounded-full text-xs font-medium transition-all border", filterStage === s ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/30")}>
-                {STAGE_LABELS[s]} ({count})
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Leads */}
-        {leadsLoading && <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>}
-
-        {!leadsLoading && filteredLeads.length === 0 && (
-          <div className="card-premium p-10 text-center">
-            <Users size={24} className="text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground text-sm">No leads in this stage</p>
+        {/* Kanban board */}
+        {view === "kanban" && (
+          <div className="overflow-x-auto pb-4">
+            <div className="flex gap-4 min-w-max">
+              {KANBAN_STAGES.map(stage => {
+                const stageLeads = byStage(stage);
+                const stageValue = stageLeads.reduce((s: number, l: any) => s + (Number(l.dealValue) || 0), 0);
+                return (
+                  <div key={stage} className="w-72 flex flex-col gap-3">
+                    {/* Column header */}
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={cn("text-xs", STAGE_COLORS[stage])}>{STAGE_LABELS[stage]}</Badge>
+                        <span className="text-xs text-muted-foreground bg-white/5 rounded-full px-2 py-0.5">{stageLeads.length}</span>
+                      </div>
+                      {stageValue > 0 && <span className="text-xs text-muted-foreground">₹{stageValue.toLocaleString()}</span>}
+                    </div>
+                    {/* Cards */}
+                    <div className="space-y-2 min-h-[120px]">
+                      {stageLeads.map((lead: any) => (
+                        <div
+                          key={lead.id}
+                          className="card-premium p-3 cursor-pointer hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/5 group"
+                          onClick={() => setSelectedLead(lead)}
+                        >
+                          <div className="flex items-start gap-2 mb-2">
+                            <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                              {(lead.name || "?")[0].toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-foreground leading-tight truncate">{lead.name || "Unnamed Lead"}</p>
+                              {lead.company && <p className="text-[10px] text-muted-foreground truncate">{lead.company}</p>}
+                            </div>
+                          </div>
+                          {lead.dealValue && (
+                            <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-medium">
+                              <DollarSign size={10} />₹{Number(lead.dealValue).toLocaleString()}
+                            </div>
+                          )}
+                          {lead.source && (
+                            <p className="text-[10px] text-muted-foreground mt-1">via {lead.source}</p>
+                          )}
+                          {/* Move forward button */}
+                          {NEXT_STAGE[stage] && VALID_STAGES.includes(NEXT_STAGE[stage] as ValidStage) && (
+                            <button
+                              className="mt-2 w-full text-[10px] text-primary/60 hover:text-primary flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={e => {
+                                e.stopPropagation();
+                                handleMoveStage(lead.id, NEXT_STAGE[stage]);
+                              }}
+                            >
+                              Move to {STAGE_LABELS[NEXT_STAGE[stage]]} <ArrowRight size={10} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {stageLeads.length === 0 && (
+                        <div className="border border-dashed border-border/30 rounded-xl p-4 text-center">
+                          <p className="text-[11px] text-muted-foreground">No leads here yet</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        <div className="space-y-2">
-          {filteredLeads.map((lead: any) => (
-            <button key={lead.id} onClick={() => setSelectedLead(lead)}
-              className="card-premium p-4 w-full text-left hover:border-primary/30 transition-all">
-              <div className="flex items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-sm font-semibold text-foreground">{lead.name}</p>
-                    <Badge variant="outline" className={cn("text-xs", STAGE_COLORS[lead.stage] || "bg-muted text-muted-foreground")}>
-                      {STAGE_LABELS[lead.stage] || lead.stage}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    {lead.company && <span>{lead.company}</span>}
-                    {lead.email && <span>{lead.email}</span>}
-                    {lead.source && <span>via {lead.source}</span>}
-                  </div>
-                </div>
-                {lead.dealValue && (
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-emerald-400">${Number(lead.dealValue).toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">deal value</p>
-                  </div>
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
+        {/* List view */}
+        {view === "list" && (
+          <div className="card-premium overflow-hidden">
+            {leadsLoading ? (
+              <div className="p-4 space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/50">
+                    {["Lead", "Company", "Stage", "Value", "Source", "Action"].map(h => (
+                      <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {leadsArr.map((lead: any) => (
+                    <tr key={lead.id} className="border-b border-border/30 hover:bg-white/[0.02] cursor-pointer" onClick={() => setSelectedLead(lead)}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center text-primary text-xs font-bold">
+                            {(lead.name || "?")[0].toUpperCase()}
+                          </div>
+                          <span className="font-medium text-foreground text-xs">{lead.name || "—"}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{lead.company || "—"}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className={cn("text-[10px]", STAGE_COLORS[lead.stage] || "")}>{STAGE_LABELS[lead.stage] || lead.stage}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-emerald-400 font-medium">{lead.dealValue ? `₹${Number(lead.dealValue).toLocaleString()}` : "—"}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{lead.source || "—"}</td>
+                      <td className="px-4 py-3">
+                        {NEXT_STAGE[lead.stage] && VALID_STAGES.includes(NEXT_STAGE[lead.stage] as ValidStage) && (
+                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 gap-1"
+                            onClick={e => { e.stopPropagation(); handleMoveStage(lead.id, NEXT_STAGE[lead.stage]); }}>
+                            → {STAGE_LABELS[NEXT_STAGE[lead.stage]]}
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {!leadsLoading && leadsArr.length === 0 && (
+              <div className="p-12 text-center text-muted-foreground text-sm">No leads in your pipeline yet.</div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Lead Detail Dialog */}
-      {selectedLead && (
-        <Dialog open={!!selectedLead} onOpenChange={() => setSelectedLead(null)}>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{selectedLead.name}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {selectedLead.company && <div><p className="text-xs text-muted-foreground">Company</p><p className="font-medium text-foreground">{selectedLead.company}</p></div>}
-                {selectedLead.email && <div><p className="text-xs text-muted-foreground">Email</p><p className="font-medium text-foreground">{selectedLead.email}</p></div>}
-                {selectedLead.phone && <div><p className="text-xs text-muted-foreground">Phone</p><p className="font-medium text-foreground">{selectedLead.phone}</p></div>}
-                {selectedLead.dealValue && <div><p className="text-xs text-muted-foreground">Deal Value</p><p className="font-bold text-emerald-400">${Number(selectedLead.dealValue).toLocaleString()}</p></div>}
+      {/* Lead detail dialog */}
+      <Dialog open={!!selectedLead} onOpenChange={() => setSelectedLead(null)}>
+        <DialogContent className="max-w-lg bg-[#0d0d1a] border-border/50 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center text-primary text-sm font-bold">
+                {(selectedLead?.name || "?")[0].toUpperCase()}
+              </div>
+              {selectedLead?.name || "Lead Detail"}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedLead && (
+            <div className="space-y-4">
+              {/* Info grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { icon: <Building2 size={13} />, label: "Company", value: selectedLead.company },
+                  { icon: <Mail size={13} />, label: "Email", value: selectedLead.email },
+                  { icon: <Phone size={13} />, label: "Phone", value: selectedLead.phone },
+                  { icon: <Target size={13} />, label: "Source", value: selectedLead.source },
+                  { icon: <DollarSign size={13} />, label: "Deal Value", value: selectedLead.dealValue ? `₹${Number(selectedLead.dealValue).toLocaleString()}` : null },
+                  { icon: <BarChart3 size={13} />, label: "Stage", value: STAGE_LABELS[selectedLead.stage] },
+                ].filter(i => i.value).map(item => (
+                  <div key={item.label} className="bg-white/[0.03] rounded-lg p-2.5">
+                    <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                      {item.icon}<span className="text-[10px]">{item.label}</span>
+                    </div>
+                    <p className="text-xs font-medium text-foreground truncate">{item.value}</p>
+                  </div>
+                ))}
               </div>
 
-              {permissions.editLeads && (
-                <div>
-                  <p className="text-sm font-medium text-foreground mb-2">Update Stage</p>
-                  <div className="flex flex-wrap gap-2">
-                    {STAGES.map(s => (
-                      <button key={s}                 onClick={() => updateStage.mutate({ token, leadId: selectedLead.id, stage: s as any })}
-                        className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all", selectedLead.stage === s ? STAGE_COLORS[s] : "bg-muted text-muted-foreground border-border hover:border-primary/30")}>
-                        {STAGE_LABELS[s]}
-                      </button>
-                    ))}
-                  </div>
+              {/* Stage progression */}
+              <div>
+                <p className="text-xs font-medium text-foreground mb-2">Move to Stage</p>
+                <div className="flex flex-wrap gap-2">
+                  {VALID_STAGES.filter(s => s !== selectedLead.stage).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => {
+                        handleMoveStage(selectedLead.id, s);
+                        setSelectedLead({ ...selectedLead, stage: s });
+                      }}
+                      className={cn("text-[11px] px-2.5 py-1 rounded-full border transition-colors hover:opacity-80 cursor-pointer", STAGE_COLORS[s])}
+                    >
+                      {STAGE_LABELS[s]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedLead.notes && (
+                <div className="bg-white/[0.03] rounded-lg p-3">
+                  <p className="text-[10px] text-muted-foreground mb-1">Notes</p>
+                  <p className="text-xs text-foreground">{selectedLead.notes}</p>
                 </div>
               )}
 
-              {/* Activities */}
-              {activities && activities.length > 0 && (
+              {/* Activity log */}
+              {(activities as any[]).length > 0 && (
                 <div>
-                  <p className="text-sm font-medium text-foreground mb-2">Activity Log</p>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {activities.map((act: any) => (
-                      <div key={act.id} className="flex items-start gap-2 text-xs">
-                        <Clock size={12} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <p className="text-xs font-medium text-foreground mb-2 flex items-center gap-1.5">
+                    <Activity size={12} />Activity Log
+                  </p>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {(activities as any[]).map((act: any) => (
+                      <div key={act.id} className="flex items-start gap-2 text-[11px]">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary/60 mt-1.5 shrink-0" />
                         <div>
-                          <p className="text-foreground">{act.description}</p>
-                          <p className="text-muted-foreground">{new Date(act.createdAt).toLocaleString()}</p>
+                          <span className="text-foreground">{act.description || act.detail}</span>
+                          <span className="text-muted-foreground ml-1.5">{new Date(act.createdAt).toLocaleDateString()}</span>
                         </div>
                       </div>
                     ))}
@@ -216,19 +366,30 @@ export default function ClientPortal() {
               )}
 
               {/* Add note */}
-              <div>
-                <p className="text-sm font-medium text-foreground mb-2">Add Note</p>
-                <Textarea placeholder="Add a note or update about this lead..." value={note}
-                  onChange={e => setNote(e.target.value)} className="bg-muted border-border" rows={2} />
-                <Button size="sm" className="mt-2 gap-2" disabled={!note.trim() || addNote.isPending}
-                  onClick={() => addNote.mutate({ token, leadId: selectedLead.id, notes: note })}>
-                  {addNote.isPending ? <><Zap size={12} className="animate-spin" />Adding...</> : <><MessageSquare size={12} />Add Note</>}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                  <MessageSquare size={12} />Add a Note
+                </p>
+                <Textarea
+                  placeholder="Add a note about this lead..."
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  className="text-xs min-h-[70px] resize-none"
+                />
+                <Button
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => addNoteMutation.mutate({ token, leadId: selectedLead.id, notes: note })}
+                  disabled={!note.trim() || addNoteMutation.isPending}
+                >
+                  <MessageSquare size={13} />
+                  {addNoteMutation.isPending ? "Adding..." : "Add Note"}
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
