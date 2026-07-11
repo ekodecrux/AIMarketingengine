@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { scrapeWebsite } from "./websiteScraper";
+import { validateSocialCredentials } from "./socialValidator";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
 import { sdk } from "./_core/sdk";
@@ -751,8 +752,28 @@ Return JSON: {title, body, hashtags, ssiTips, bestPostingTime, engagementPredict
         projectId: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        await upsertSocialAccount({ ...input, userId: ctx.user.id, status: "connected" });
-        return { success: true };
+        // Real credential validation — ping the platform API before saving
+        const validation = await validateSocialCredentials(
+          input.platform,
+          input.accessToken,
+          input.apiKey,
+          input.apiSecret
+        );
+        if (!validation.valid) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: validation.error || "Invalid credentials — please check your token or API key",
+          });
+        }
+        // Use the verified account name from the API if available
+        const verifiedName = validation.accountInfo || input.accountName;
+        await upsertSocialAccount({
+          ...input,
+          accountName: verifiedName,
+          userId: ctx.user.id,
+          status: "connected",
+        });
+        return { success: true, accountInfo: verifiedName };
       }),
 
     disconnect: protectedProcedure

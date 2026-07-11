@@ -31,7 +31,12 @@ export default function Integrations() {
   );
 
   const connect = trpc.socialAccounts.connect.useMutation({
-    onSuccess: () => { refetch(); setConnecting(null); setForm({ accountName: "", accessToken: "", apiKey: "", apiSecret: "" }); toast.success("Account connected!"); },
+    onSuccess: (data) => {
+      refetch();
+      setConnecting(null);
+      setForm({ accountName: "", accessToken: "", apiKey: "", apiSecret: "" });
+      toast.success(`Connected: ${data.accountInfo || "Account"}`);
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -110,7 +115,7 @@ export default function Integrations() {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-2">
-              <p className="text-xs text-muted-foreground">Enter your account credentials. These are stored securely and used only for publishing and campaign management.</p>
+              <p className="text-xs text-muted-foreground">Enter your credentials. They will be <strong>validated against the platform API</strong> before saving — invalid tokens will be rejected.</p>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Account Name / Handle *</label>
                 <Input placeholder="e.g. @yourbrand or Your Brand Name" value={form.accountName}
@@ -133,9 +138,9 @@ export default function Integrations() {
                     onChange={e => setForm(f => ({ ...f, apiSecret: e.target.value }))} className="bg-muted border-border" />
                 </div>
               </div>
-              <Button className="w-full btn-glow gap-2" disabled={!form.accountName || connect.isPending}
+              <Button className="w-full btn-glow gap-2" disabled={(!form.accessToken && !form.apiKey) || connect.isPending}
                 onClick={() => connect.mutate({ platform: connecting as any, ...form })}>
-                {connect.isPending ? <><Zap size={16} className="animate-spin" />Connecting...</> : <><CheckCircle2 size={16} />Connect Account</>}
+                {connect.isPending ? <><Zap size={16} className="animate-spin" />Validating credentials...</> : <><CheckCircle2 size={16} />Validate &amp; Connect</>}
               </Button>
             </div>
           </DialogContent>

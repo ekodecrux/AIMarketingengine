@@ -135,6 +135,6 @@
 - [x] Dashboard trend chart: replace mockLeadTrend with real DB-derived monthly aggregation of leads and closed revenue per month
 - [x] GlobalSettings: wire AI model, notifications, platform defaults to DB via globalSettings table (load on mount, persist on save)
 - [x] Lead Scraper: rename to "AI Lead Prospector", make UI honest (AI-generated prospects, not real scraped data), add clear disclaimer
-- [ ] Social Integrations: validate credentials with real API ping per platform on connect (LinkedIn token check, Meta token debug, Google token info, etc.)
+- [x] Social Integrations: validate credentials with real API ping per platform on connect (LinkedIn /v2/userinfo, Meta /me + debug_token, Google tokeninfo, Twitter /users/me, WhatsApp /me, Quora /ads/v0/me)
 - [x] Admin Panel: implement real User Management (list all users, change role) and Usage Analytics (AI call count from knowledge table)
 - [x] Dashboard metric trend badges computed from real DB data (month-over-month calculation)
