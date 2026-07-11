@@ -3,22 +3,95 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useParams } from "wouter";
 import { useProject } from "@/contexts/ProjectContext";
 import { useEffect, useState } from "react";
-import { Sparkles, Zap, Target, DollarSign, TrendingUp, Calendar } from "lucide-react";
+import {
+  Sparkles, Zap, Target, DollarSign, TrendingUp, Calendar,
+  CheckCircle2, AlertTriangle, Lightbulb, BarChart3, Search,
+  MessageSquare, Globe, Users, ArrowRight, Clock
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Streamdown } from "streamdown";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function parsePlan(raw: string | null | undefined): Record<string, any> | null {
+  if (!raw) return null;
+  // strip markdown code fences if present
+  const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+  try { return JSON.parse(clean); } catch { return null; }
+}
+
+const CHANNEL_ICONS: Record<string, React.ReactNode> = {
+  seo: <Search size={14} />,
+  "google ads": <Globe size={14} />,
+  "facebook": <Users size={14} />,
+  "instagram": <Users size={14} />,
+  "linkedin": <Users size={14} />,
+  "whatsapp": <MessageSquare size={14} />,
+  "content": <BarChart3 size={14} />,
+};
+
+function channelIcon(name: string) {
+  const key = name.toLowerCase();
+  for (const k of Object.keys(CHANNEL_ICONS)) {
+    if (key.includes(k)) return CHANNEL_ICONS[k];
+  }
+  return <Target size={14} />;
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+function SectionCard({ title, icon, children, accent = "primary" }: { title: string; icon: React.ReactNode; children: React.ReactNode; accent?: string }) {
+  return (
+    <div className="card-premium p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <div className={`w-8 h-8 rounded-lg bg-${accent}/15 flex items-center justify-center text-${accent}`}>{icon}</div>
+        <h3 className="font-semibold text-foreground">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ChannelCard({ ch, symbol }: { ch: any; symbol: string }) {
+  const pct = Number(ch.budget_percent || ch.budgetPercent || 0);
+  return (
+    <div className="bg-muted/50 rounded-xl p-4 space-y-3 border border-border/50 hover:border-primary/30 transition-colors">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md bg-primary/15 flex items-center justify-center text-primary">
+            {channelIcon(ch.channel || "")}
+          </div>
+          <span className="font-medium text-sm text-foreground">{ch.channel}</span>
+          {ch.channel?.toLowerCase().includes("seo") && (
+            <Badge className="text-[10px] bg-violet-500/15 text-violet-400 border-violet-500/20 px-1.5 py-0">Primary</Badge>
+          )}
+        </div>
+        <span className="text-xs font-semibold text-primary">{pct}%</span>
+      </div>
+      <Progress value={pct} className="h-1.5" />
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>{symbol}{ch.monthly_budget || ch.monthlyBudget || "—"}/mo</span>
+        <span className="text-emerald-400">{ch.expectedROI || ch.expected_roi || "—"} ROI</span>
+      </div>
+      {ch.tactics && (
+        <p className="text-xs text-muted-foreground leading-relaxed">{
+          Array.isArray(ch.tactics) ? ch.tactics.slice(0, 2).join(" · ") : ch.tactics
+        }</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function MarketingPlan() {
   const params = useParams<{ id: string }>();
   const projectId = Number(params.id);
-  const { setActiveProjectId } = useProject();
+  const { setActiveProjectId, currencySymbol } = useProject();
   useEffect(() => { if (projectId) setActiveProjectId(projectId); }, [projectId]);
 
   const [showForm, setShowForm] = useState(false);
@@ -26,6 +99,7 @@ export default function MarketingPlan() {
 
   const { data: plans, isLoading, refetch } = trpc.marketingPlans.list.useQuery({ projectId }, { enabled: !!projectId });
   const { data: project } = trpc.projects.get.useQuery({ id: projectId }, { enabled: !!projectId });
+  const { data: biz } = trpc.businessProfile.get.useQuery({ projectId }, { enabled: !!projectId });
 
   const generatePlan = trpc.marketingPlans.generate.useMutation({
     onSuccess: () => { toast.success("Marketing plan generated!"); refetch(); setShowForm(false); },
@@ -33,22 +107,21 @@ export default function MarketingPlan() {
   });
 
   const latestPlan = plans?.[0];
+  const parsed = parsePlan(latestPlan?.planJson);
 
-  // Pre-fill from project
+  // Pre-fill from project + business profile
   useEffect(() => {
-    if (project) {
-      setForm(f => ({
-        ...f,
-        objective: project.goal || f.objective,
-        budget: project.monthlyBudget || f.budget,
-      }));
-    }
+    if (project) setForm(f => ({ ...f, objective: project.goal || f.objective, budget: project.monthlyBudget || f.budget }));
   }, [project]);
+  useEffect(() => {
+    if (biz) setForm(f => ({ ...f, targetAudience: f.targetAudience || biz.targetAudience || "" }));
+  }, [biz]);
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
-        <div className="p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6 pb-16">
+          {/* Header */}
           <div className="flex items-center justify-between">
             <div>
               <h1 className="font-display font-bold text-2xl text-foreground">AI Marketing Plan</h1>
@@ -59,13 +132,14 @@ export default function MarketingPlan() {
             </Button>
           </div>
 
+          {/* Empty state */}
           {!latestPlan && !isLoading && (
             <div className="card-premium p-12 text-center space-y-4">
               <div className="w-16 h-16 rounded-2xl bg-primary/15 flex items-center justify-center mx-auto">
                 <Sparkles size={28} className="text-primary" />
               </div>
               <h2 className="font-display font-bold text-xl">No Marketing Plan Yet</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
+              <p className="text-muted-foreground max-w-md mx-auto text-sm">
                 Our AI will create a comprehensive, SEO-first marketing strategy tailored to your business goals and budget — in seconds.
               </p>
               <Button onClick={() => setShowForm(true)} className="btn-glow gap-2">
@@ -78,11 +152,12 @@ export default function MarketingPlan() {
 
           {latestPlan && (
             <div className="space-y-6 animate-fade-in-up">
+              {/* KPI Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
                   { label: "Primary Channel", value: "SEO", sub: "Highest long-term ROI", icon: <Target size={18} />, color: "bg-violet-500/15 text-violet-400" },
-                  { label: "Monthly Budget", value: latestPlan.totalBudget ? `$${latestPlan.totalBudget}` : "Not set", sub: "Optimally allocated", icon: <DollarSign size={18} />, color: "bg-emerald-500/15 text-emerald-400" },
-                  { label: "Expected Leads", value: "15–30/mo", sub: "Based on industry avg", icon: <TrendingUp size={18} />, color: "bg-sky-500/15 text-sky-400" },
+                  { label: "Monthly Budget", value: latestPlan.totalBudget ? `${currencySymbol}${latestPlan.totalBudget}` : "Not set", sub: "Optimally allocated", icon: <DollarSign size={18} />, color: "bg-emerald-500/15 text-emerald-400" },
+                  { label: "Expected Leads", value: parsed?.kpis?.[0]?.target || "15–30/mo", sub: "Based on industry avg", icon: <TrendingUp size={18} />, color: "bg-sky-500/15 text-sky-400" },
                   { label: "Timeframe", value: latestPlan.timeframe || "6 months", sub: "To see results", icon: <Calendar size={18} />, color: "bg-amber-500/15 text-amber-400" },
                 ].map(card => (
                   <div key={card.label} className="metric-card">
@@ -94,22 +169,199 @@ export default function MarketingPlan() {
                 ))}
               </div>
 
-              <div className="card-premium p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-foreground">Full Marketing Strategy</h3>
-                  <Badge variant="outline" className="text-xs text-muted-foreground">
-                    Generated {new Date(latestPlan.createdAt).toLocaleDateString()}
-                  </Badge>
+              {parsed ? (
+                <>
+                  {/* Executive Summary */}
+                  {parsed.executiveSummary && (
+                    <div className="card-premium p-5 border-l-4 border-primary">
+                      <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">Executive Summary</p>
+                      <p className="text-sm text-foreground leading-relaxed">{parsed.executiveSummary}</p>
+                    </div>
+                  )}
+
+                  {/* Goals / OKRs */}
+                  {parsed.goals?.length > 0 && (
+                    <SectionCard title="Goals & OKRs" icon={<Target size={16} />}>
+                      <div className="space-y-3">
+                        {parsed.goals.map((g: any, i: number) => (
+                          <div key={i} className="bg-muted/50 rounded-xl p-4 border border-border/50">
+                            <p className="text-sm font-medium text-foreground mb-2">{g.objective}</p>
+                            {g.keyResults?.map((kr: any, j: number) => (
+                              <div key={j} className="flex items-start gap-2 text-xs text-muted-foreground mt-1">
+                                <CheckCircle2 size={12} className="text-emerald-400 mt-0.5 flex-shrink-0" />
+                                <span>{kr.kr || kr} — <span className="text-foreground">{kr.target}</span> by {kr.timeframe}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {/* Channel Budget Breakdown */}
+                  {parsed.channels?.length > 0 && (
+                    <SectionCard title="Channel Strategy & Budget Allocation" icon={<BarChart3 size={16} />} accent="emerald-500">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {parsed.channels.map((ch: any, i: number) => (
+                          <ChannelCard key={i} ch={ch} symbol={currencySymbol} />
+                        ))}
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {/* SEO Strategy */}
+                  {parsed.seoStrategy && (
+                    <SectionCard title="SEO Strategy" icon={<Search size={16} />} accent="violet-500">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {parsed.seoStrategy.primaryKeywords?.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Primary Keywords</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {parsed.seoStrategy.primaryKeywords.slice(0, 8).map((kw: string, i: number) => (
+                                <Badge key={i} variant="outline" className="text-xs">{kw}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {parsed.seoStrategy.expectedTimeToRank && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Expected Time to Rank</p>
+                            <p className="text-sm text-foreground">{parsed.seoStrategy.expectedTimeToRank}</p>
+                          </div>
+                        )}
+                        {parsed.seoStrategy.technicalSeo && (
+                          <div className="md:col-span-2">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Technical SEO Actions</p>
+                            <p className="text-sm text-foreground leading-relaxed">{
+                              Array.isArray(parsed.seoStrategy.technicalSeo)
+                                ? parsed.seoStrategy.technicalSeo.join(" · ")
+                                : parsed.seoStrategy.technicalSeo
+                            }</p>
+                          </div>
+                        )}
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {/* Quick Wins */}
+                  {parsed.quickWins?.length > 0 && (
+                    <SectionCard title="Quick Wins — Results in 30 Days" icon={<Zap size={16} />} accent="amber-500">
+                      <div className="space-y-2">
+                        {parsed.quickWins.map((win: string, i: number) => (
+                          <div key={i} className="flex items-start gap-2 text-sm">
+                            <ArrowRight size={14} className="text-amber-400 mt-0.5 flex-shrink-0" />
+                            <span className="text-foreground">{win}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {/* Milestones */}
+                  {parsed.milestones?.length > 0 && (
+                    <SectionCard title="Execution Milestones" icon={<Clock size={16} />} accent="sky-500">
+                      <div className="space-y-3">
+                        {parsed.milestones.map((m: any, i: number) => (
+                          <div key={i} className="flex items-start gap-3">
+                            <div className="w-14 flex-shrink-0 text-center">
+                              <span className="text-xs font-semibold text-primary bg-primary/15 px-2 py-1 rounded-md">{m.week || `M${i+1}`}</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{m.action}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{m.expectedOutcome}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {/* KPIs */}
+                  {parsed.kpis?.length > 0 && (
+                    <SectionCard title="Key Performance Indicators" icon={<TrendingUp size={16} />} accent="emerald-500">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {parsed.kpis.map((kpi: any, i: number) => (
+                          <div key={i} className="bg-muted/50 rounded-xl p-3 border border-border/50">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium text-foreground">{kpi.metric}</span>
+                              <span className="text-xs font-semibold text-primary">{kpi.target}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{kpi.plainEnglishExplanation || kpi.measurement}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {/* Budget Breakdown */}
+                  {parsed.budgetBreakdown && (
+                    <SectionCard title="Budget Breakdown" icon={<DollarSign size={16} />} accent="emerald-500">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {Object.entries(parsed.budgetBreakdown).map(([key, val]: [string, any]) => (
+                          <div key={key} className="bg-muted/50 rounded-xl p-3 border border-border/50 text-center">
+                            <p className="text-xs text-muted-foreground capitalize mb-1">{key.replace(/([A-Z])/g, " $1").trim()}</p>
+                            <p className="text-sm font-bold text-foreground">{currencySymbol}{val}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {/* Warning Signals */}
+                  {parsed.warningSignals?.length > 0 && (
+                    <SectionCard title="Warning Signals to Watch" icon={<AlertTriangle size={16} />} accent="amber-500">
+                      <div className="space-y-2">
+                        {parsed.warningSignals.map((w: string, i: number) => (
+                          <div key={i} className="flex items-start gap-2 text-sm">
+                            <AlertTriangle size={13} className="text-amber-400 mt-0.5 flex-shrink-0" />
+                            <span className="text-foreground">{w}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {/* WhatsApp Strategy */}
+                  {parsed.whatsappStrategy && (
+                    <SectionCard title="WhatsApp Marketing Strategy" icon={<MessageSquare size={16} />} accent="emerald-500">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        {parsed.whatsappStrategy.audienceSegments && <div><p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Audience Segments</p><p className="text-foreground">{parsed.whatsappStrategy.audienceSegments}</p></div>}
+                        {parsed.whatsappStrategy.broadcastFrequency && <div><p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Broadcast Frequency</p><p className="text-foreground">{parsed.whatsappStrategy.broadcastFrequency}</p></div>}
+                        {parsed.whatsappStrategy.expectedOpenRate && <div><p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Expected Open Rate</p><p className="text-foreground text-emerald-400 font-semibold">{parsed.whatsappStrategy.expectedOpenRate}</p></div>}
+                        {parsed.whatsappStrategy.messageTemplates?.length > 0 && (
+                          <div className="md:col-span-2">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Sample Message Templates</p>
+                            <div className="space-y-2">
+                              {parsed.whatsappStrategy.messageTemplates.slice(0, 2).map((t: string, i: number) => (
+                                <div key={i} className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3 text-xs text-foreground">{t}</div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-2">
+                    <span className="flex items-center gap-1"><Lightbulb size={12} />Generated by Nexus AI using RACE framework + 70/20/10 budget rule</span>
+                    <Badge variant="outline" className="text-xs">{new Date(latestPlan.createdAt).toLocaleDateString()}</Badge>
+                  </div>
+                </>
+              ) : (
+                /* Fallback: raw text if JSON parse fails */
+                <div className="card-premium p-6">
+                  <h3 className="font-semibold text-foreground mb-4">Full Marketing Strategy</h3>
+                  <pre className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed font-mono overflow-x-auto">
+                    {latestPlan.planJson}
+                  </pre>
                 </div>
-                <div className="prose prose-invert max-w-none text-sm leading-relaxed">
-                  <Streamdown>{latestPlan.planJson || "No content available"}</Streamdown>
-                </div>
-              </div>
+              )}
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
+      {/* Generate Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -124,8 +376,8 @@ export default function MarketingPlan() {
               <Input value={form.objective} onChange={e => setForm(f => ({ ...f, objective: e.target.value }))} placeholder="e.g. Generate more leads" className="bg-muted border-border" />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Monthly Budget (USD)</label>
-              <Input value={form.budget} onChange={e => setForm(f => ({ ...f, budget: e.target.value }))} placeholder="e.g. 2000" className="bg-muted border-border" />
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Monthly Budget ({currencySymbol})</label>
+              <Input value={form.budget} onChange={e => setForm(f => ({ ...f, budget: e.target.value }))} placeholder="e.g. 50000" className="bg-muted border-border" />
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Timeframe</label>
@@ -135,8 +387,13 @@ export default function MarketingPlan() {
               <label className="text-sm font-medium text-foreground mb-1.5 block">Target Audience (optional)</label>
               <Textarea value={form.targetAudience} onChange={e => setForm(f => ({ ...f, targetAudience: e.target.value }))} placeholder="Who are your ideal customers?" className="bg-muted border-border" rows={2} />
             </div>
-            <Button className="w-full btn-glow gap-2" onClick={() => generatePlan.mutate({ projectId, ...form, industry: project?.industry || undefined })} disabled={generatePlan.isPending}>
-              {generatePlan.isPending ? <><Zap size={16} className="animate-spin" />Generating...</> : <><Sparkles size={16} />Generate Plan</>}
+            {biz?.companyName && (
+              <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 text-xs text-muted-foreground">
+                <span className="text-primary font-medium">Using business profile:</span> {biz.companyName} · {biz.industry}
+              </div>
+            )}
+            <Button className="w-full btn-glow gap-2" onClick={() => generatePlan.mutate({ projectId, ...form, industry: project?.industry || biz?.industry || undefined })} disabled={generatePlan.isPending}>
+              {generatePlan.isPending ? <><Zap size={16} className="animate-spin" />Generating Plan...</> : <><Sparkles size={16} />Generate Plan</>}
             </Button>
           </div>
         </DialogContent>

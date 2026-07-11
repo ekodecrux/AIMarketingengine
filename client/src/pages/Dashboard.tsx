@@ -58,7 +58,7 @@ function MetricCard({ label, value, sub, icon, color, trend }: {
 
 export default function Dashboard() {
   const { isAuthenticated, loading } = useAuth();
-  const { activeProjectId, setActiveProjectId } = useProject();
+  const { activeProjectId, setActiveProjectId, currencySymbol } = useProject();
   const [, navigate] = useLocation();
 
   const { data: stats, isLoading: statsLoading } = trpc.dashboard.consolidated.useQuery(undefined, {
@@ -100,8 +100,8 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
-        <div className="p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6 pb-16">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="font-display font-bold text-2xl text-foreground">Marketing Intelligence Hub</h1>
@@ -131,7 +131,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
               <MetricCard label="Total Projects" value={stats.projects ?? 0} icon={<Layers size={18} />} color="bg-violet-500/15 text-violet-400" trend={12} />
               <MetricCard label="Total Leads" value={stats.leads ?? 0} sub="Across all projects" icon={<Users size={18} />} color="bg-sky-500/15 text-sky-400" trend={24} />
-              <MetricCard label="Revenue Closed" value={`$${Number(stats.revenue ?? 0).toLocaleString()}`} sub="Closed won deals" icon={<DollarSign size={18} />} color="bg-emerald-500/15 text-emerald-400" trend={18} />
+              <MetricCard label="Revenue Closed" value={`${currencySymbol}${Number(stats.revenue ?? 0).toLocaleString()}`} sub="Closed won deals" icon={<DollarSign size={18} />} color="bg-emerald-500/15 text-emerald-400" trend={18} />
               <MetricCard label="Conversion Rate" value={`${stats.conversionRate ?? 0}%`} sub="Lead to close" icon={<Target size={18} />} color="bg-amber-500/15 text-amber-400" trend={5} />
             </div>
           )}
@@ -208,8 +208,8 @@ export default function Dashboard() {
                 <Badge variant="outline" className="text-xs">{projects?.find(p => p.id === activeProjectId)?.name}</Badge>
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-                <MetricCard label="Pipeline Value" value={`$${Number(projectStats.leads?.totalPipeline || 0).toLocaleString()}`} icon={<TrendingUp size={18} />} color="bg-violet-500/15 text-violet-400" />
-                <MetricCard label="Active Campaigns" value={projectStats.campaigns?.total || 0} sub={`$${Number(projectStats.campaigns?.totalSpent || 0).toLocaleString()} spent`} icon={<BarChart3 size={18} />} color="bg-sky-500/15 text-sky-400" />
+                <MetricCard label="Pipeline Value" value={`${currencySymbol}${Number(projectStats.leads?.totalPipeline || 0).toLocaleString()}`} icon={<TrendingUp size={18} />} color="bg-violet-500/15 text-violet-400" />
+                <MetricCard label="Active Campaigns" value={projectStats.campaigns?.total || 0} sub={`${currencySymbol}${Number(projectStats.campaigns?.totalSpent || 0).toLocaleString()} spent`} icon={<BarChart3 size={18} />} color="bg-sky-500/15 text-sky-400" />
                 <MetricCard label="Content Pieces" value={projectStats.content?.total || 0} sub={`${projectStats.content?.published || 0} published`} icon={<FileText size={18} />} color="bg-amber-500/15 text-amber-400" />
                 <MetricCard label="Keywords Tracked" value={projectStats.seo?.keywords || 0} sub={`${projectStats.seo?.backlinks || 0} backlinks`} icon={<Target size={18} />} color="bg-emerald-500/15 text-emerald-400" />
               </div>
@@ -248,7 +248,7 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      </ScrollArea>
+      </div>
     </AppLayout>
   );
 }

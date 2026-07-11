@@ -62,12 +62,12 @@ export const businessProfiles = mysqlTable("businessProfiles", {
   extractionSource: mysqlEnum("extractionSource", ["website", "manual", "hybrid"])
     .default("manual")
     .notNull(),
-  sourceUrl: varchar("sourceUrl", { length: 500 }),
+    sourceUrl: varchar("sourceUrl", { length: 500 }),
   rawExtraction: text("rawExtraction"),
+  currency: varchar("currency", { length: 10 }).default("USD").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
 export type BusinessProfile = typeof businessProfiles.$inferSelect;
 
 /** AI generated marketing plans */

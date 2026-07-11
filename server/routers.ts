@@ -259,6 +259,7 @@ Return a JSON object with these fields:
         location: z.string().optional(),
         extractionSource: z.enum(["website", "manual", "hybrid"]).optional(),
         sourceUrl: z.string().optional(),
+        currency: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         await upsertBusinessProfile(input);

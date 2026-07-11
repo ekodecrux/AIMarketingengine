@@ -36,7 +36,7 @@ export default function WhatsApp() {
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="p-6 space-y-6 max-w-2xl">
           <div>
             <h1 className="font-display font-bold text-2xl text-foreground flex items-center gap-2">
@@ -114,7 +114,7 @@ export default function WhatsApp() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </AppLayout>
   );
 }

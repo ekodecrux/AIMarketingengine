@@ -40,7 +40,7 @@ export default function Integrations() {
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="p-6 space-y-6 max-w-2xl">
           <div>
             <h1 className="font-display font-bold text-2xl text-foreground">Integrations</h1>
@@ -93,7 +93,7 @@ export default function Integrations() {
             </div>
           </div>
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Connect Dialog */}
       {connecting && (

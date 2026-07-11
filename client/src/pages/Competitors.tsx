@@ -45,8 +45,8 @@ export default function Competitors() {
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
-        <div className="p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6 pb-16">
           <div>
             <h1 className="font-display font-bold text-2xl text-foreground">Competitor Analysis</h1>
             <p className="text-muted-foreground text-sm mt-1">AI-powered competitive landscape analysis and positioning strategy</p>
@@ -120,7 +120,7 @@ export default function Competitors() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </AppLayout>
   );
 }

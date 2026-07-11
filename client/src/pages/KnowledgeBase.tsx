@@ -55,8 +55,8 @@ export default function KnowledgeBase() {
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
-        <div className="p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6 pb-16">
           <div>
             <h1 className="font-display font-bold text-2xl text-foreground flex items-center gap-2">
               <Brain size={24} className="text-primary" />Knowledge Base
@@ -164,7 +164,7 @@ export default function KnowledgeBase() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </AppLayout>
   );
 }

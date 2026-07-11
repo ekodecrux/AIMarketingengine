@@ -22,7 +22,7 @@ const STATUSES = ["draft", "active", "paused", "completed"];
 export default function Campaigns() {
   const params = useParams<{ id: string }>();
   const projectId = Number(params.id);
-  const { setActiveProjectId } = useProject();
+  const { setActiveProjectId, currencySymbol } = useProject();
   useEffect(() => { if (projectId) setActiveProjectId(projectId); }, [projectId]);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -58,8 +58,8 @@ export default function Campaigns() {
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
-        <div className="p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6 pb-16">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="font-display font-bold text-2xl text-foreground">Campaigns</h1>
@@ -73,8 +73,8 @@ export default function Campaigns() {
           {/* Summary metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Total Budget", value: `$${totalBudget.toLocaleString()}`, icon: <DollarSign size={16} />, color: "text-primary" },
-              { label: "Total Spent", value: `$${totalSpent.toLocaleString()}`, icon: <TrendingUp size={16} />, color: "text-amber-400" },
+              { label: "Total Budget", value: `${currencySymbol}${totalBudget.toLocaleString()}`, icon: <DollarSign size={16} />, color: "text-primary" },
+              { label: "Total Spent", value: `${currencySymbol}${totalSpent.toLocaleString()}`, icon: <TrendingUp size={16} />, color: "text-amber-400" },
               { label: "Impressions", value: totalImpressions.toLocaleString(), icon: <Eye size={16} />, color: "text-sky-400" },
               { label: "Clicks", value: totalClicks.toLocaleString(), icon: <MousePointer size={16} />, color: "text-emerald-400" },
             ].map(m => (
@@ -141,7 +141,7 @@ export default function Campaigns() {
             ))}
           </div>
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Create Campaign Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>

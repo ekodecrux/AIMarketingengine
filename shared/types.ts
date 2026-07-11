@@ -67,6 +67,25 @@ export const MARKETING_GOALS = [
   "Build thought leadership",
 ];
 
+export const CURRENCIES: { code: string; symbol: string; name: string }[] = [
+  { code: "USD", symbol: "$", name: "US Dollar" },
+  { code: "INR", symbol: "₹", name: "Indian Rupee" },
+  { code: "EUR", symbol: "€", name: "Euro" },
+  { code: "GBP", symbol: "£", name: "British Pound" },
+  { code: "AED", symbol: "د.إ", name: "UAE Dirham" },
+  { code: "SGD", symbol: "S$", name: "Singapore Dollar" },
+  { code: "AUD", symbol: "A$", name: "Australian Dollar" },
+  { code: "CAD", symbol: "C$", name: "Canadian Dollar" },
+  { code: "JPY", symbol: "¥", name: "Japanese Yen" },
+  { code: "MYR", symbol: "RM", name: "Malaysian Ringgit" },
+  { code: "SAR", symbol: "﷼", name: "Saudi Riyal" },
+  { code: "QAR", symbol: "QR", name: "Qatari Riyal" },
+];
+
+export function getCurrencySymbol(code: string): string {
+  return CURRENCIES.find(c => c.code === code)?.symbol ?? code;
+}
+
 export const GLOSSARY: Record<string, string> = {
   SEO: "Search Engine Optimisation — getting your website to appear higher in Google search results without paying for ads.",
   CTR: "Click-Through Rate — the percentage of people who click your ad or link after seeing it. Higher is better.",

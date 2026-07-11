@@ -175,13 +175,25 @@
 
 /* Sidebar nav item */
 .nav-item {
-  @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground transition-all duration-150 cursor-pointer;
+  @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground transition-all duration-150 cursor-pointer select-none;
+  pointer-events: auto;
 }
 .nav-item:hover {
   @apply bg-accent text-foreground;
+  transform: translateX(2px);
 }
 .nav-item.active {
   @apply bg-primary/15 text-primary;
+}
+
+/* Ensure all interactive elements are always clickable */
+button, a, [role="button"], .nav-item, [tabindex] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  pointer-events: auto;
 }
 
 /* Pipeline kanban column */

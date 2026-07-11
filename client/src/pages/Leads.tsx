@@ -30,7 +30,7 @@ const STAGE_CONFIG: Record<LeadStage, { label: string; color: string; bg: string
 export default function Leads() {
   const params = useParams<{ id: string }>();
   const projectId = Number(params.id);
-  const { setActiveProjectId } = useProject();
+  const { setActiveProjectId, currencySymbol } = useProject();
   useEffect(() => { if (projectId) setActiveProjectId(projectId); }, [projectId]);
 
   const [showAddLead, setShowAddLead] = useState(false);
@@ -100,8 +100,8 @@ export default function Leads() {
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
-        <div className="p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6 pb-16">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <h1 className="font-display font-bold text-2xl text-foreground">Leads & CRM Pipeline</h1>
@@ -124,8 +124,8 @@ export default function Leads() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: "Total Leads", value: leads?.length || 0, icon: <Users size={18} />, color: "bg-sky-500/15 text-sky-400" },
-              { label: "Pipeline Value", value: `$${totalPipeline.toLocaleString()}`, icon: <Target size={18} />, color: "bg-violet-500/15 text-violet-400" },
-              { label: "Revenue Closed", value: `$${closedRevenue.toLocaleString()}`, icon: <DollarSign size={18} />, color: "bg-emerald-500/15 text-emerald-400" },
+              { label: "Pipeline Value", value: `${currencySymbol}${totalPipeline.toLocaleString()}`, icon: <Target size={18} />, color: "bg-violet-500/15 text-violet-400" },
+              { label: "Revenue Closed", value: `${currencySymbol}${closedRevenue.toLocaleString()}`, icon: <DollarSign size={18} />, color: "bg-emerald-500/15 text-emerald-400" },
               { label: "Conversion Rate", value: leads?.length ? `${Math.round((leadsByStage.closed_won.length / leads.length) * 100)}%` : "0%", icon: <Target size={18} />, color: "bg-amber-500/15 text-amber-400" },
             ].map(card => (
               <div key={card.label} className="metric-card">
@@ -185,7 +185,7 @@ export default function Leads() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Add Lead Dialog */}
       <Dialog open={showAddLead} onOpenChange={setShowAddLead}>

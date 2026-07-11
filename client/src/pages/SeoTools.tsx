@@ -50,8 +50,8 @@ export default function SeoTools() {
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
-        <div className="p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6 pb-16">
           <div>
             <h1 className="font-display font-bold text-2xl text-foreground">SEO Tools</h1>
             <p className="text-muted-foreground text-sm mt-1">On-page SEO audits, backlink tracking, and E-E-A-T optimisation — your primary growth channel</p>
@@ -201,7 +201,7 @@ export default function SeoTools() {
             </TabsContent>
           </Tabs>
         </div>
-      </ScrollArea>
+      </div>
     </AppLayout>
   );
 }

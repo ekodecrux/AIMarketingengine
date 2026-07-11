@@ -84,8 +84,8 @@ export default function ContentStudio() {
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
-        <div className="p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6 pb-16">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="font-display font-bold text-2xl text-foreground">Content Studio</h1>
@@ -142,7 +142,7 @@ export default function ContentStudio() {
             </TabsContent>
           </Tabs>
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Generate Dialog */}
       <Dialog open={showGenerate} onOpenChange={setShowGenerate}>
