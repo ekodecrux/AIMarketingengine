@@ -2,7 +2,6 @@ import { AppLayout } from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -21,9 +20,26 @@ export default function Keywords() {
 
   const [seedKeywords, setSeedKeywords] = useState("");
   const [analysisResult, setAnalysisResult] = useState<string>("");
+  const [autoPopulated, setAutoPopulated] = useState(false);
 
   const { data: keywords, isLoading, refetch } = trpc.keywords.list.useQuery({ projectId }, { enabled: !!projectId });
   const { data: project } = trpc.projects.get.useQuery({ id: projectId }, { enabled: !!projectId });
+  const { data: profile } = trpc.businessProfile.get.useQuery({ projectId }, { enabled: !!projectId });
+
+  // Auto-populate seed keywords from business profile context
+  useEffect(() => {
+    if (!autoPopulated && (profile || project)) {
+      const parts = [
+        project?.name,
+        profile?.industry || project?.industry,
+        profile?.targetAudience,
+      ].filter(Boolean);
+      if (parts.length > 0) {
+        setSeedKeywords(parts.join(", "));
+        setAutoPopulated(true);
+      }
+    }
+  }, [profile, project, autoPopulated]);
 
   const analyze = trpc.keywords.analyze.useMutation({
     onSuccess: (data: any) => {

@@ -115,7 +115,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-y-auto">
           <div className="p-3 space-y-1">
             {/* Global nav */}
             {globalNav.map((item) => (
@@ -221,7 +221,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* User footer */}
         <div className="p-3 border-t border-sidebar-border">

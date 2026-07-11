@@ -37,10 +37,10 @@
 ## Quality & Delivery
 - [x] Vitest unit tests for core routers (17 tests passing)
 - [x] End-to-end verification via preview screenshots
-- [ ] Save checkpoint and share preview with user
+- [x] Save checkpoint and share preview with user
 - [x] Push MVP to GitHub repo ekodecrux/AIMarketingengine
 - [x] Push each subsequent change to GitHub (automated on each checkpoint)
-- [ ] Guide user to publish to permanent production URL
+- [x] Guide user to publish to permanent production URL
 
 ## Industry Best Practices Embedded in AI Engine
 - [x] RACE framework (Reach, Act, Convert, Engage) in marketing plan generator
@@ -97,14 +97,14 @@
 
 ## Bug Fixes
 - [x] Marketing plan renders raw JSON instead of formatted sections
-- [ ] Business profile not showing after extraction (data not persisting/loading on return)
-- [ ] Mouse hover not working on interactive elements
-- [ ] Page scroll broken - cannot browse top to bottom on pages
-- [ ] Fix scroll broken on all pages (replace ScrollArea with native overflow-y-auto)
-- [ ] Fix hover states not working on interactive elements
-- [ ] Marketing plan: parse JSON and render as beautiful formatted sections (not raw JSON)
-- [ ] Business profile: auto-save after URL extraction, persist on navigation
-- [ ] All pages: state must persist when switching menus (no blank resets)
-- [ ] Keywords: auto-load business profile context for AI recommendations
+- [x] Business profile not showing after extraction (data not persisting/loading on return)
+- [x] Mouse hover not working on interactive elements
+- [x] Page scroll broken - cannot browse top to bottom on pages
+- [x] Fix scroll broken on all pages (replace ScrollArea with native overflow-y-auto)
+- [x] Fix hover states not working on interactive elements
+- [x] Marketing plan: parse JSON and render as beautiful formatted sections (not raw JSON)
+- [x] Business profile: auto-save after URL extraction, persist on navigation
+- [x] All pages: state must persist when switching menus (no blank resets)
+- [x] Keywords: auto-load business profile context for AI recommendations
 - [x] Add currency selector (INR/USD/EUR/GBP/AED/SGD etc.) to Business Profile
 - [x] Use configured currency symbol everywhere: dashboard, campaigns, leads, marketing plan, ROI

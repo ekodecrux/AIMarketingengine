@@ -18,11 +18,16 @@ export default function BusinessProfile() {
   const { setActiveProjectId, setCurrency, currency } = useProject();
   const initialised = useRef(false);
 
-  useEffect(() => { if (projectId) setActiveProjectId(projectId); }, [projectId]);
+  useEffect(() => {
+    if (projectId) {
+      setActiveProjectId(projectId);
+      initialised.current = false; // Reset so profile always reloads when navigating back
+    }
+  }, [projectId]);
 
   const { data: profile, refetch, isLoading } = trpc.businessProfile.get.useQuery(
     { projectId },
-    { enabled: !!projectId, staleTime: 60_000 }
+    { enabled: !!projectId, staleTime: 0 } // Always fetch fresh data
   );
 
   const [form, setForm] = useState({

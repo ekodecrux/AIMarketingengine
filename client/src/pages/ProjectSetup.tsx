@@ -3,7 +3,6 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -54,7 +53,7 @@ export default function ProjectSetup() {
 
   return (
     <AppLayout>
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto p-6 space-y-8">
           <div>
             <h1 className="font-display font-bold text-2xl text-foreground">Create New Project</h1>
@@ -207,7 +206,7 @@ export default function ProjectSetup() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </AppLayout>
   );
 }
